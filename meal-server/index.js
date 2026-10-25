@@ -1,36 +1,44 @@
-import express from 'express';
+import express from "express";
 import cors from "cors";
-import { MongoClient} from "mongodb";
 import "dotenv/config";
+import { connectDB } from "./config/db.js";
 
+// Routes
+import mealRoutes from "./routes/mealRoutes.js";
+import adminRoutes from "./routes/adminRoutes.js";
+import chefRoutes from "./routes/chefRoutes.js";
 
 const app = express();
 const port = process.env.PORT || 5000;
 
-// middleware's
-app.use(cors()); // for data share between ports
-app.use(express.json()); // to parse data
+// Middlewares
+app.use(cors());
+app.use(express.json());
 
-const client = new MongoClient(`mongodb://${process.env.DB_USER}:${process.env.DB_PASS}@ac-vwgi4dy-shard-00-00.yleslu4.mongodb.net:27017,ac-vwgi4dy-shard-00-01.yleslu4.mongodb.net:27017,ac-vwgi4dy-shard-00-02.yleslu4.mongodb.net:27017/?ssl=true&replicaSet=atlas-ydwn0o-shard-0&authSource=admin`);
+// Connect to MongoDB
+connectDB();
 
-export const connectToMongoDB = async() =>{
-  try {
-    await client.connect();
-    console.log("You successfully connected to MongoDB!");
-    return client;
-  } catch (err) {
-    console.log(err);
-  }
-}
-const connectedClient = await connectToMongoDB();
-const database = connectedClient.db("weekly-meal");
-const users = database.collection("users");
+// API Routes
+app.use("/api/meals", mealRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/chef", chefRoutes);
 
-
-app.get('/', (req, res) => {
-  res.send('Server for weekly meal is ready');
+// Health check
+app.get("/", (req, res) => {
+  res.json({
+    status: "online",
+    service: "Weekly Meal Management API",
+    version: "1.0.0",
+    endpoints: {
+      student: "/api/meals",
+      admin: "/api/admin",
+      chef: "/api/chef",
+    },
+  });
 });
 
 app.listen(port, () => {
-  console.log(`meal-server is listening on port ${port}`);
+  console.log(`Meal Management Express Server running on port ${port}`);
 });
+
+export default app;
