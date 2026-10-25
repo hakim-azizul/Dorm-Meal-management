@@ -1,1 +1,10 @@
 @import "tailwindcss";
+@import "daisyui/daisyui.css";
+@import "daisyui/themes.css";
+
+/* Base styles and Arabic font support */
+@layer base {
+  [dir="rtl"] {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+}
