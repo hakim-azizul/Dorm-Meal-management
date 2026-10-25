@@ -17,8 +17,8 @@ import {
   X,
   ShieldAlert,
   Trash2,
-  Edit3,
-  SlidersHorizontal,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 
 const DAYS: DayKey[] = ["sat", "sun", "mon", "tue", "wed", "thu", "fri"];
@@ -36,11 +36,13 @@ export default function AdminDashboard() {
     deleteStudent,
     addNewChef,
     deleteChef,
+    backendOnline,
   } = useMealApp();
 
   const [activeTab, setActiveTab] = useState<"students" | "chefs">("students");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "penalized" | "redflags" | "active">("all");
+  const [notification, setNotification] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Punishment Modal
   const [selectedStudentForBlock, setSelectedStudentForBlock] = useState<StudentRecord | null>(null);
@@ -66,13 +68,13 @@ export default function AdminDashboard() {
       s.email.toLowerCase().includes(searchTerm.toLowerCase());
 
     if (!matchesSearch) return false;
-    if (statusFilter === "penalized") return s.isPenalized;
+    if (statusFilter === "penalized") return s.isBlocked;
     if (statusFilter === "redflags") return s.isRedFlagged;
-    if (statusFilter === "active") return !s.isPenalized && !s.isRedFlagged;
+    if (statusFilter === "active") return !s.isBlocked && !s.isRedFlagged;
     return true;
   });
 
-  const penalizedCount = students.filter((s) => s.isPenalized).length;
+  const penalizedCount = students.filter((s) => s.isBlocked).length;
   const redFlagCount = students.filter((s) => s.isRedFlagged).length;
 
   const totalWeeklyLunchesBooked = students.reduce((acc, student) => {
@@ -85,40 +87,83 @@ export default function AdminDashboard() {
     setPenaltyReasonText(student.penaltyReason || "Hostel noise complaint and meal violation");
   };
 
-  const handleConfirmPenalty = () => {
+  const handleConfirmPenalty = async () => {
     if (selectedStudentForBlock) {
-      toggleStudentPenalty(selectedStudentForBlock.id, penaltyReasonText);
+      await toggleStudentPenalty(selectedStudentForBlock.id, penaltyReasonText);
+      setNotification({
+        type: "success",
+        text: `Meal restriction imposed on ${selectedStudentForBlock.name}. Reason: ${penaltyReasonText}`,
+      });
       setSelectedStudentForBlock(null);
       setPenaltyReasonText("");
+      setTimeout(() => setNotification(null), 4000);
     }
   };
 
-  const handleCreateStudent = (e: React.FormEvent) => {
+  const handleLiftPenalty = async (student: StudentRecord) => {
+    await toggleStudentPenalty(student.id);
+    setNotification({
+      type: "success",
+      text: `Meal privileges restored for ${student.name}.`,
+    });
+    setTimeout(() => setNotification(null), 4000);
+  };
+
+  const handleToggleLock = async () => {
+    await toggleGlobalLock();
+    setNotification({
+      type: "success",
+      text: `Global Selection Lock is now ${!isGlobalLocked ? "ACTIVATED (Locked)" : "UNLOCKED"}.`,
+    });
+    setTimeout(() => setNotification(null), 4000);
+  };
+
+  const handleOverrideLunch = async (studentId: string, day: DayKey) => {
+    await adminOverrideStudentLunch(studentId, day);
+    const stu = students.find((s) => s.id === studentId);
+    setNotification({
+      type: "success",
+      text: `Updated ${day.toUpperCase()} lunch choice for ${stu?.name || "student"}.`,
+    });
+    setTimeout(() => setNotification(null), 3000);
+  };
+
+  const handleCreateStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newStudentName && newStudentRoom && newStudentEmail) {
-      addNewStudent({
+      await addNewStudent({
         name: newStudentName,
         room: newStudentRoom,
         email: newStudentEmail,
+      });
+      setNotification({
+        type: "success",
+        text: `Student ${newStudentName} created and enrolled.`,
       });
       setNewStudentName("");
       setNewStudentRoom("");
       setNewStudentEmail("");
       setShowAddStudentModal(false);
+      setTimeout(() => setNotification(null), 4000);
     }
   };
 
-  const handleCreateChef = (e: React.FormEvent) => {
+  const handleCreateChef = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newChefName && newChefEmail) {
-      addNewChef({
+      await addNewChef({
         name: newChefName,
         email: newChefEmail,
         shift: newChefShift,
       });
+      setNotification({
+        type: "success",
+        text: `Chef ${newChefName} registered successfully.`,
+      });
       setNewChefName("");
       setNewChefEmail("");
       setShowAddChefModal(false);
+      setTimeout(() => setNotification(null), 4000);
     }
   };
 
@@ -131,9 +176,22 @@ export default function AdminDashboard() {
             <ShieldCheck className="w-9 h-9" />
           </div>
           <div>
-            <h1 className="text-2xl sm:text-3xl font-black text-base-content">
-              {t("adminHeading")}
-            </h1>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-2xl sm:text-3xl font-black text-base-content">
+                {t("adminHeading")}
+              </h1>
+              <span
+                className={`badge badge-xs font-bold gap-1 py-2 px-2.5 ${
+                  backendOnline
+                    ? "badge-success badge-outline text-emerald-600"
+                    : "badge-ghost opacity-60"
+                }`}
+                title={backendOnline ? "Connected to Express Backend (Port 5000)" : "Running in Local Simulation Mode"}
+              >
+                {backendOnline ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+                <span>{backendOnline ? "API Online" : "Local Mode"}</span>
+              </span>
+            </div>
             <p className="text-xs sm:text-sm text-base-content/70 mt-1">
               Hostel Warden Master Controls • Disciplinary Enforcement & Account Management
             </p>
@@ -156,7 +214,7 @@ export default function AdminDashboard() {
           </div>
 
           <button
-            onClick={toggleGlobalLock}
+            onClick={handleToggleLock}
             className={`btn btn-sm gap-2 font-bold shadow-xs transition-all ${
               isGlobalLocked
                 ? "btn-error text-white"
@@ -177,6 +235,24 @@ export default function AdminDashboard() {
           </button>
         </div>
       </div>
+
+      {/* Toast Notification */}
+      {notification && (
+        <div
+          className={`alert mb-6 shadow-md transition-all ${
+            notification.type === "success"
+              ? "alert-success text-success-content"
+              : "alert-error text-white"
+          }`}
+        >
+          {notification.type === "success" ? (
+            <CheckCircle2 className="w-5 h-5 shrink-0" />
+          ) : (
+            <AlertTriangle className="w-5 h-5 shrink-0" />
+          )}
+          <span className="text-xs sm:text-sm font-bold">{notification.text}</span>
+        </div>
+      )}
 
       {/* Metrics Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -354,8 +430,8 @@ export default function AdminDashboard() {
                               return (
                                 <button
                                   key={day}
-                                  onClick={() => adminOverrideStudentLunch(student.id, day)}
-                                  title={`Click to toggle ${day.toUpperCase()} lunch for ${student.name}`}
+                                  onClick={() => handleOverrideLunch(student.id, day)}
+                                  title={`Click to manually toggle ${day.toUpperCase()} lunch for ${student.name}`}
                                   className={`badge badge-xs font-extrabold uppercase text-[10px] py-2 px-1.5 transition-all hover:scale-110 cursor-pointer ${
                                     isSelected
                                       ? "badge-primary text-primary-content"
@@ -372,10 +448,10 @@ export default function AdminDashboard() {
                           </div>
                         </td>
 
-                        {/* Status (Penalized / Red-Flagged / Active) */}
+                        {/* Status (Blocked / Red-Flagged / Active) */}
                         <td>
                           <div className="flex flex-col gap-1">
-                            {student.isPenalized && (
+                            {student.isBlocked && (
                               <span className="badge badge-error gap-1 text-[10px] font-bold text-white py-2">
                                 <ShieldAlert className="w-3 h-3" />
                                 Selection Blocked
@@ -387,7 +463,7 @@ export default function AdminDashboard() {
                                 Red-Flagged Absent
                               </span>
                             )}
-                            {!student.isPenalized && !student.isRedFlagged && (
+                            {!student.isBlocked && !student.isRedFlagged && (
                               <span className="badge badge-success gap-1 text-[10px] font-bold text-success-content py-2">
                                 <CheckCircle2 className="w-3 h-3" />
                                 Normal & Permitted
@@ -404,9 +480,9 @@ export default function AdminDashboard() {
                         {/* Punishment Actions */}
                         <td>
                           <div className="flex items-center gap-1.5">
-                            {student.isPenalized ? (
+                            {student.isBlocked ? (
                               <button
-                                onClick={() => toggleStudentPenalty(student.id)}
+                                onClick={() => handleLiftPenalty(student)}
                                 className="btn btn-xs btn-outline btn-success font-bold gap-1"
                               >
                                 <CheckCircle2 className="w-3 h-3" />

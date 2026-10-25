@@ -1,6 +1,7 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import * as api from "@/lib/api";
 
 export type Role = "student" | "admin" | "chef";
 export type DayKey = "sat" | "sun" | "mon" | "tue" | "wed" | "thu" | "fri";
@@ -23,7 +24,7 @@ export interface StudentRecord {
   name: string;
   room: string;
   email: string;
-  isPenalized: boolean;
+  isBlocked: boolean;
   penaltyReason?: string;
   isRedFlagged: boolean;
   redFlagReason?: string;
@@ -46,8 +47,38 @@ export interface ChefRecord {
   shift: string;
 }
 
+export interface PredefinedAccount {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  room?: string;
+}
+
+export const PREDEFINED_ACCOUNTS: Record<Role, PredefinedAccount> = {
+  student: {
+    id: "671cc81a1234567890123451", // Seeded ObjectId format for Ahmed
+    name: "Ahmed Al-Mansoor",
+    email: "ahmed@hostel.edu",
+    role: "student",
+    room: "A-204",
+  },
+  admin: {
+    id: "671cc81a1234567890123452", // Seeded ObjectId format for Warden
+    name: "Dr. Ibrahim (Hostel Warden)",
+    email: "warden@hostel.edu",
+    role: "admin",
+  },
+  chef: {
+    id: "671cc81a1234567890123453", // Seeded ObjectId format for Chef
+    name: "Chef Mahmoud Hassan",
+    email: "chef@hostel.edu",
+    role: "chef",
+  },
+};
+
 interface MealAppContextType {
-  // Authentication & Role Isolation
+  // Authentication & Role State
   currentRole: Role | null;
   currentUser: {
     id: string;
@@ -55,60 +86,63 @@ interface MealAppContextType {
     email: string;
     role: Role;
     room?: string;
-    isPenalized?: boolean;
+    isBlocked?: boolean;
     penaltyReason?: string;
     isRedFlagged?: boolean;
   } | null;
   loginAsRole: (role: Role) => void;
   logout: () => void;
+  backendOnline: boolean;
 
-  // Operating Day & Date Simulation (Chef Restricted Strictly to Today)
+  // Operating Day & Date Simulation
   systemDay: DayKey;
   setSystemDay: (day: DayKey) => void;
   toggleFridaySimulation: () => void;
   isFriday: boolean;
   todayDateFormatted: string;
 
-  // Admin Master Controls
+  // Global Lock
   isGlobalLocked: boolean;
-  toggleGlobalLock: () => void;
-  toggleStudentPenalty: (studentId: string, reason?: string) => void;
-  adminOverrideStudentLunch: (studentId: string, day: DayKey) => void;
-  addNewStudent: (student: { name: string; room: string; email: string }) => void;
-  deleteStudent: (studentId: string) => void;
-  addNewChef: (chef: { name: string; email: string; shift: string }) => void;
-  deleteChef: (chefId: string) => void;
+  toggleGlobalLock: () => Promise<void>;
 
   // Student Actions
   studentSchedule: StudentScheduleDay[];
-  toggleStudentLunch: (day: DayKey) => { success: boolean; message: string };
+  toggleStudentLunch: (day: DayKey) => Promise<{ success: boolean; message: string }>;
+  refreshStudentData: () => Promise<void>;
 
-  // Chef Attendance Actions
+  // Admin Actions
   students: StudentRecord[];
   chefs: ChefRecord[];
-  markChefBreakfast: (studentId: string) => void;
-  markChefDinner: (studentId: string) => void;
-  markChefLunchStatus: (studentId: string, status: "present" | "absent") => { success: boolean; message: string };
-  isStudentRedFlaggedForDay: (studentId: string, day: DayKey) => boolean;
+  toggleStudentPenalty: (studentId: string, reason?: string) => Promise<void>;
+  adminOverrideStudentLunch: (studentId: string, day: DayKey) => Promise<void>;
+  addNewStudent: (student: { name: string; room: string; email: string }) => Promise<void>;
+  deleteStudent: (studentId: string) => Promise<void>;
+  addNewChef: (chef: { name: string; email: string; shift: string }) => Promise<void>;
+  deleteChef: (chefId: string) => Promise<void>;
+
+  // Chef Attendance Actions
+  markChefBreakfast: (studentId: string) => Promise<void>;
+  markChefDinner: (studentId: string) => Promise<void>;
+  markChefLunchStatus: (studentId: string, status: "present" | "absent") => Promise<{ success: boolean; message: string }>;
 }
 
 const MealAppContext = createContext<MealAppContextType | undefined>(undefined);
 
 const DAYS: DayKey[] = ["sat", "sun", "mon", "tue", "wed", "thu", "fri"];
 
-const INITIAL_STUDENTS: StudentRecord[] = [
+const INITIAL_FALLBACK_STUDENTS: StudentRecord[] = [
   {
-    id: "stu-1",
+    id: PREDEFINED_ACCOUNTS.student.id,
     name: "Ahmed Al-Mansoor",
     room: "A-204",
     email: "ahmed@hostel.edu",
-    isPenalized: false,
+    isBlocked: false,
     isRedFlagged: true,
     redFlagReason: "Missed pre-selected Sunday lunch without prior check-in",
     schedule: {
       sat: { lunchSelected: true, lunchCheckedIn: true, lunchMissed: false },
-      sun: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: true }, // Missed Sunday!
-      mon: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false }, // Today!
+      sun: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: true },
+      mon: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
       tue: { lunchSelected: false, lunchCheckedIn: false, lunchMissed: false },
       wed: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
       thu: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
@@ -121,11 +155,11 @@ const INITIAL_STUDENTS: StudentRecord[] = [
     },
   },
   {
-    id: "stu-2",
+    id: "671cc81a1234567890123454",
     name: "Omar Tariq",
     room: "B-108",
     email: "omar@hostel.edu",
-    isPenalized: true,
+    isBlocked: true,
     penaltyReason: "Disciplinary hold: Room inspection violation",
     isRedFlagged: false,
     schedule: {
@@ -144,16 +178,16 @@ const INITIAL_STUDENTS: StudentRecord[] = [
     },
   },
   {
-    id: "stu-3",
+    id: "671cc81a1234567890123455",
     name: "Khalid Bin Ziyad",
     room: "C-301",
     email: "khalid@hostel.edu",
-    isPenalized: false,
+    isBlocked: false,
     isRedFlagged: false,
     schedule: {
       sat: { lunchSelected: false, lunchCheckedIn: false, lunchMissed: false },
       sun: { lunchSelected: true, lunchCheckedIn: true, lunchMissed: false },
-      mon: { lunchSelected: false, lunchCheckedIn: false, lunchMissed: false }, // Did NOT select Monday lunch! MUST NOT appear in lunch tab!
+      mon: { lunchSelected: false, lunchCheckedIn: false, lunchMissed: false },
       tue: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
       wed: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
       thu: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
@@ -166,16 +200,16 @@ const INITIAL_STUDENTS: StudentRecord[] = [
     },
   },
   {
-    id: "stu-4",
+    id: "671cc81a1234567890123456",
     name: "Zaid Mostafa",
     room: "A-102",
     email: "zaid@hostel.edu",
-    isPenalized: false,
+    isBlocked: false,
     isRedFlagged: false,
     schedule: {
       sat: { lunchSelected: true, lunchCheckedIn: true, lunchMissed: false },
       sun: { lunchSelected: true, lunchCheckedIn: true, lunchMissed: false },
-      mon: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false }, // Pre-selected Monday lunch!
+      mon: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
       tue: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
       wed: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
       thu: { lunchSelected: false, lunchCheckedIn: false, lunchMissed: false },
@@ -187,67 +221,154 @@ const INITIAL_STUDENTS: StudentRecord[] = [
       dinner: false,
     },
   },
-  {
-    id: "stu-5",
-    name: "Hamza Al-Nuaimi",
-    room: "B-202",
-    email: "hamza@hostel.edu",
-    isPenalized: false,
-    isRedFlagged: false,
-    schedule: {
-      sat: { lunchSelected: true, lunchCheckedIn: true, lunchMissed: false },
-      sun: { lunchSelected: true, lunchCheckedIn: true, lunchMissed: false },
-      mon: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
-      tue: { lunchSelected: false, lunchCheckedIn: false, lunchMissed: false },
-      wed: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
-      thu: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
-      fri: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
-    },
-    attendanceToday: {
-      breakfast: true,
-      lunch: "unmarked",
-      dinner: false,
-    },
-  },
 ];
 
-const INITIAL_CHEFS: ChefRecord[] = [
-  { id: "chef-1", name: "Chef Mahmoud Hassan", email: "mahmoud@hostel.edu", shift: "Morning & Lunch Session" },
+const INITIAL_FALLBACK_CHEFS: ChefRecord[] = [
+  { id: PREDEFINED_ACCOUNTS.chef.id, name: "Chef Mahmoud Hassan", email: "mahmoud@hostel.edu", shift: "Morning & Lunch Session" },
   { id: "chef-2", name: "Chef Farooq Qadir", email: "farooq@hostel.edu", shift: "Dinner & Night Session" },
 ];
 
 export function MealAppProvider({ children }: { children: React.ReactNode }) {
-  // 1. Role & Auth State
   const [currentRole, setCurrentRole] = useState<Role | null>("student");
-
-  // 2. System Day (Default: Monday to illustrate strict Today check-ins; can be simulated as Friday)
   const [systemDay, setSystemDay] = useState<DayKey>("mon");
-
-  // 3. Admin Master Lock
   const [isGlobalLocked, setIsGlobalLocked] = useState<boolean>(false);
+  const [backendOnline, setBackendOnline] = useState<boolean>(false);
 
-  // 4. Data lists
-  const [students, setStudents] = useState<StudentRecord[]>(INITIAL_STUDENTS);
-  const [chefs, setChefs] = useState<ChefRecord[]>(INITIAL_CHEFS);
+  const [students, setStudents] = useState<StudentRecord[]>(INITIAL_FALLBACK_STUDENTS);
+  const [chefs, setChefs] = useState<ChefRecord[]>(INITIAL_FALLBACK_CHEFS);
 
-  // Active student reference (Ahmed Al-Mansoor)
-  const activeStudent = students.find((s) => s.id === "stu-1") || students[0];
+  // Active student reference (Ahmed)
+  const activeStudent = students.find((s) => s.id === PREDEFINED_ACCOUNTS.student.id) || students[0];
 
   const currentUser = currentRole
     ? {
-        id: currentRole === "student" ? activeStudent.id : currentRole === "admin" ? "admin-1" : "chef-1",
-        name: currentRole === "student" ? activeStudent.name : currentRole === "admin" ? "Dr. Ibrahim (Hostel Warden)" : "Chef Mahmoud Hassan",
-        email: currentRole === "student" ? activeStudent.email : currentRole === "admin" ? "warden@hostel.edu" : "chef@hostel.edu",
+        id: PREDEFINED_ACCOUNTS[currentRole].id,
+        name: currentRole === "student" ? activeStudent.name : PREDEFINED_ACCOUNTS[currentRole].name,
+        email: currentRole === "student" ? activeStudent.email : PREDEFINED_ACCOUNTS[currentRole].email,
         role: currentRole,
         room: currentRole === "student" ? activeStudent.room : undefined,
-        isPenalized: currentRole === "student" ? activeStudent.isPenalized : false,
+        isBlocked: currentRole === "student" ? activeStudent.isBlocked : false,
         penaltyReason: currentRole === "student" ? activeStudent.penaltyReason : undefined,
         isRedFlagged: currentRole === "student" ? activeStudent.isRedFlagged : false,
       }
     : null;
 
   const isFriday = systemDay === "fri";
-  const todayDateFormatted = isFriday ? "Friday, Oct 30, 2026 (Selection Day)" : "Monday, Oct 26, 2026 (Operating Day)";
+  const todayDateFormatted = isFriday ? "Friday, Oct 30, 2026 (Selection Window)" : "Monday, Oct 26, 2026 (Operating Day)";
+
+  // Check backend health & fetch live data on mount
+  const checkBackendHealth = useCallback(async () => {
+    try {
+      const res = await fetch("http://localhost:5000/", { method: "GET" });
+      if (res.ok) {
+        setBackendOnline(true);
+      } else {
+        setBackendOnline(false);
+      }
+    } catch {
+      setBackendOnline(false);
+    }
+  }, []);
+
+  // Fetch student data from backend if online
+  const refreshStudentData = useCallback(async () => {
+    try {
+      const res = await api.getMySelection(PREDEFINED_ACCOUNTS.student.id);
+      if (res.success && res.student) {
+        setIsGlobalLocked(res.isGlobalLocked);
+        setStudents((prev) =>
+          prev.map((s) => {
+            if (s.id === PREDEFINED_ACCOUNTS.student.id) {
+              const remoteSelections = res.selection?.lunchSelections || {};
+              const updatedSched = { ...s.schedule };
+              DAYS.forEach((d) => {
+                if (typeof remoteSelections[d] === "boolean") {
+                  updatedSched[d] = {
+                    ...updatedSched[d],
+                    lunchSelected: remoteSelections[d],
+                  };
+                }
+              });
+
+              return {
+                ...s,
+                name: res.student.name || s.name,
+                isBlocked: res.student.isBlocked ?? s.isBlocked,
+                isRedFlagged: res.student.isRedFlagged ?? s.isRedFlagged,
+                penaltyReason: res.student.penaltyReason ?? s.penaltyReason,
+                schedule: updatedSched,
+              };
+            }
+            return s;
+          })
+        );
+      }
+    } catch {
+      // Backend not running; fallback state remains active
+    }
+  }, []);
+
+  // Fetch admin user roster if online
+  const refreshUsersList = useCallback(async () => {
+    try {
+      const res = await api.getUsers();
+      if (res.success && Array.isArray(res.users) && res.users.length > 0) {
+        const studentUsers = res.users.filter((u) => u.role === "student");
+        const chefUsers = res.users.filter((u) => u.role === "chef");
+
+        if (studentUsers.length > 0) {
+          setStudents((prev) => {
+            const mapped = studentUsers.map((u) => {
+              const existing = prev.find((p) => p.id === u._id || p.email === u.email);
+              return {
+                id: u._id,
+                name: u.name,
+                room: u.room || "A-101",
+                email: u.email,
+                isBlocked: u.isBlocked,
+                penaltyReason: u.penaltyReason,
+                isRedFlagged: u.isRedFlagged,
+                schedule: existing?.schedule || {
+                  sat: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
+                  sun: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
+                  mon: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
+                  tue: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
+                  wed: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
+                  thu: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
+                  fri: { lunchSelected: false, lunchCheckedIn: false, lunchMissed: false },
+                },
+                attendanceToday: existing?.attendanceToday || {
+                  breakfast: false,
+                  lunch: "unmarked",
+                  dinner: false,
+                },
+              };
+            });
+            return mapped;
+          });
+        }
+
+        if (chefUsers.length > 0) {
+          setChefs(
+            chefUsers.map((c) => ({
+              id: c._id,
+              name: c.name,
+              email: c.email,
+              shift: "General Shift",
+            }))
+          );
+        }
+      }
+    } catch {
+      // Keep fallback
+    }
+  }, []);
+
+  useEffect(() => {
+    checkBackendHealth();
+    refreshStudentData();
+    refreshUsersList();
+  }, [checkBackendHealth, refreshStudentData, refreshUsersList]);
 
   const loginAsRole = (role: Role) => {
     setCurrentRole(role);
@@ -261,11 +382,19 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
     setSystemDay((prev) => (prev === "fri" ? "mon" : "fri"));
   };
 
-  const toggleGlobalLock = () => {
-    setIsGlobalLocked((prev) => !prev);
+  // Toggle Global Lock with Backend Sync
+  const toggleGlobalLock = async () => {
+    const nextVal = !isGlobalLocked;
+    setIsGlobalLocked(nextVal);
+
+    try {
+      await api.toggleGlobalLock(nextVal);
+    } catch {
+      // Handled in client state
+    }
   };
 
-  // Student Weekly Schedule Generator
+  // Student Weekly Schedule computation
   const studentSchedule: StudentScheduleDay[] = DAYS.map((day) => {
     const studentDay = activeStudent.schedule[day];
     return {
@@ -281,8 +410,8 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
     };
   });
 
-  // Student toggles lunch (Strictly allowed ONLY on Fridays, if not locked, and not penalized)
-  const toggleStudentLunch = (day: DayKey): { success: boolean; message: string } => {
+  // Student modifies lunch choice (Enforces Friday-only, unblocked, unlocked)
+  const toggleStudentLunch = async (day: DayKey): Promise<{ success: boolean; message: string }> => {
     if (!isFriday) {
       return {
         success: false,
@@ -297,24 +426,27 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
-    if (activeStudent.isPenalized) {
+    if (activeStudent.isBlocked) {
       return {
         success: false,
         message: `RESTRICTED: Your selection is suspended due to: ${activeStudent.penaltyReason || "Disciplinary Penalty"}.`,
       };
     }
 
+    const currentVal = activeStudent.schedule[day]?.lunchSelected ?? true;
+    const newVal = !currentVal;
+
+    // Optimistic local update
     setStudents((prev) =>
       prev.map((s) => {
         if (s.id === activeStudent.id) {
-          const currentVal = s.schedule[day]?.lunchSelected ?? true;
           return {
             ...s,
             schedule: {
               ...s.schedule,
               [day]: {
                 ...s.schedule[day],
-                lunchSelected: !currentVal,
+                lunchSelected: newVal,
               },
             },
           };
@@ -322,6 +454,23 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
         return s;
       })
     );
+
+    // Sync with backend API
+    try {
+      const selectionsPayload: Record<string, boolean> = {};
+      DAYS.forEach((d) => {
+        selectionsPayload[d] = d === day ? newVal : activeStudent.schedule[d]?.lunchSelected ?? true;
+      });
+
+      await api.selectLunch({
+        studentId: activeStudent.id,
+        weekStartDate: "2026-10-24",
+        lunchSelections: selectionsPayload,
+        simulateFriday: isFriday,
+      });
+    } catch {
+      // Local state is preserved
+    }
 
     return {
       success: true,
@@ -329,36 +478,55 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
     };
   };
 
-  // Admin: Instant student penalty toggle with reason
-  const toggleStudentPenalty = (studentId: string, reason?: string) => {
+  // Admin toggles individual student penalty / block with Backend Sync
+  const toggleStudentPenalty = async (studentId: string, reason?: string) => {
+    const student = students.find((s) => s.id === studentId);
+    if (!student) return;
+
+    const newBlocked = !student.isBlocked;
+
     setStudents((prev) =>
       prev.map((s) => {
         if (s.id === studentId) {
-          const newPenalized = !s.isPenalized;
           return {
             ...s,
-            isPenalized: newPenalized,
-            penaltyReason: newPenalized ? (reason || "Violation of hostel regulations") : undefined,
+            isBlocked: newBlocked,
+            penaltyReason: newBlocked ? (reason || "Violation of hostel regulations") : undefined,
           };
         }
         return s;
       })
     );
+
+    try {
+      await api.toggleBlockStudent({
+        studentId,
+        isBlocked: newBlocked,
+        reason: newBlocked ? reason : undefined,
+      });
+    } catch {
+      // Kept in local state
+    }
   };
 
-  // Admin: Manual override capability on student lunch selection upon request
-  const adminOverrideStudentLunch = (studentId: string, day: DayKey) => {
+  // Admin Manual Override of Lunch with Backend Sync
+  const adminOverrideStudentLunch = async (studentId: string, day: DayKey) => {
+    const student = students.find((s) => s.id === studentId);
+    if (!student) return;
+
+    const currentVal = student.schedule[day]?.lunchSelected ?? false;
+    const newVal = !currentVal;
+
     setStudents((prev) =>
       prev.map((s) => {
         if (s.id === studentId) {
-          const currentVal = s.schedule[day]?.lunchSelected ?? false;
           return {
             ...s,
             schedule: {
               ...s.schedule,
               [day]: {
                 ...s.schedule[day],
-                lunchSelected: !currentVal,
+                lunchSelected: newVal,
               },
             },
           };
@@ -366,54 +534,123 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
         return s;
       })
     );
+
+    try {
+      await api.overrideStudentMeal({
+        studentId,
+        day,
+        selected: newVal,
+      });
+    } catch {
+      // Handled in client state
+    }
   };
 
-  const addNewStudent = (newStudent: { name: string; room: string; email: string }) => {
-    const student: StudentRecord = {
-      id: `stu-${Date.now()}`,
-      name: newStudent.name,
-      room: newStudent.room,
-      email: newStudent.email,
-      isPenalized: false,
-      isRedFlagged: false,
-      schedule: {
-        sat: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
-        sun: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
-        mon: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
-        tue: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
-        wed: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
-        thu: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
-        fri: { lunchSelected: false, lunchCheckedIn: false, lunchMissed: false },
-      },
-      attendanceToday: {
-        breakfast: false,
-        lunch: "unmarked",
-        dinner: false,
-      },
-    };
-    setStudents((prev) => [...prev, student]);
+  // Admin adds new student with Backend Sync
+  const addNewStudent = async (newStudent: { name: string; room: string; email: string }) => {
+    try {
+      const res = await api.createUser({
+        name: newStudent.name,
+        room: newStudent.room,
+        email: newStudent.email,
+        role: "student",
+      });
+
+      const newId = res.user?._id || `stu-${Date.now()}`;
+
+      const created: StudentRecord = {
+        id: newId,
+        name: newStudent.name,
+        room: newStudent.room,
+        email: newStudent.email,
+        isBlocked: false,
+        isRedFlagged: false,
+        schedule: {
+          sat: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
+          sun: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
+          mon: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
+          tue: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
+          wed: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
+          thu: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
+          fri: { lunchSelected: false, lunchCheckedIn: false, lunchMissed: false },
+        },
+        attendanceToday: {
+          breakfast: false,
+          lunch: "unmarked",
+          dinner: false,
+        },
+      };
+
+      setStudents((prev) => [created, ...prev]);
+    } catch {
+      // Fallback local add
+      const fallback: StudentRecord = {
+        id: `stu-${Date.now()}`,
+        name: newStudent.name,
+        room: newStudent.room,
+        email: newStudent.email,
+        isBlocked: false,
+        isRedFlagged: false,
+        schedule: {
+          sat: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
+          sun: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
+          mon: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
+          tue: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
+          wed: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
+          thu: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
+          fri: { lunchSelected: false, lunchCheckedIn: false, lunchMissed: false },
+        },
+        attendanceToday: {
+          breakfast: false,
+          lunch: "unmarked",
+          dinner: false,
+        },
+      };
+      setStudents((prev) => [fallback, ...prev]);
+    }
   };
 
-  const deleteStudent = (studentId: string) => {
+  const deleteStudent = async (studentId: string) => {
     setStudents((prev) => prev.filter((s) => s.id !== studentId));
   };
 
-  const addNewChef = (newChef: { name: string; email: string; shift: string }) => {
-    const chef: ChefRecord = {
-      id: `chef-${Date.now()}`,
-      name: newChef.name,
-      email: newChef.email,
-      shift: newChef.shift,
-    };
-    setChefs((prev) => [...prev, chef]);
+  const addNewChef = async (newChef: { name: string; email: string; shift: string }) => {
+    try {
+      const res = await api.createUser({
+        name: newChef.name,
+        email: newChef.email,
+        role: "chef",
+      });
+
+      const newId = res.user?._id || `chef-${Date.now()}`;
+      setChefs((prev) => [
+        {
+          id: newId,
+          name: newChef.name,
+          email: newChef.email,
+          shift: newChef.shift,
+        },
+        ...prev,
+      ]);
+    } catch {
+      setChefs((prev) => [
+        {
+          id: `chef-${Date.now()}`,
+          name: newChef.name,
+          email: newChef.email,
+          shift: newChef.shift,
+        },
+        ...prev,
+      ]);
+    }
   };
 
-  const deleteChef = (chefId: string) => {
+  const deleteChef = async (chefId: string) => {
     setChefs((prev) => prev.filter((c) => c.id !== chefId));
   };
 
   // Chef Attendance Actions: Breakfast (Fixed)
-  const markChefBreakfast = (studentId: string) => {
+  const markChefBreakfast = async (studentId: string) => {
     setStudents((prev) =>
       prev.map((s) => {
         if (s.id === studentId) {
@@ -428,10 +665,20 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
         return s;
       })
     );
+
+    try {
+      await api.checkInStudent({
+        studentId,
+        mealType: "breakfast",
+        status: "present",
+      });
+    } catch {
+      // Handled in client state
+    }
   };
 
   // Chef Attendance Actions: Dinner (Fixed)
-  const markChefDinner = (studentId: string) => {
+  const markChefDinner = async (studentId: string) => {
     setStudents((prev) =>
       prev.map((s) => {
         if (s.id === studentId) {
@@ -446,10 +693,23 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
         return s;
       })
     );
+
+    try {
+      await api.checkInStudent({
+        studentId,
+        mealType: "dinner",
+        status: "present",
+      });
+    } catch {
+      // Handled in client state
+    }
   };
 
   // Chef Attendance Actions: Lunch (Strict Pre-Selection & Red-Flag Handling)
-  const markChefLunchStatus = (studentId: string, status: "present" | "absent"): { success: boolean; message: string } => {
+  const markChefLunchStatus = async (
+    studentId: string,
+    status: "present" | "absent"
+  ): Promise<{ success: boolean; message: string }> => {
     const targetStudent = students.find((s) => s.id === studentId);
     if (!targetStudent) return { success: false, message: "Student not found." };
 
@@ -457,12 +717,11 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
       return { success: false, message: "Cannot mark attendance: student did not pre-select lunch for today." };
     }
 
+    const isPresent = status === "present";
+
     setStudents((prev) =>
       prev.map((s) => {
         if (s.id === studentId) {
-          const isPresent = status === "present";
-          // If present: Clears red-flag and marks present!
-          // If absent: Flags student with RED-FLAG alert!
           return {
             ...s,
             isRedFlagged: !isPresent,
@@ -485,7 +744,17 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
       })
     );
 
-    if (status === "present") {
+    try {
+      await api.checkInStudent({
+        studentId,
+        mealType: "lunch",
+        status,
+      });
+    } catch {
+      // Client state updated
+    }
+
+    if (isPresent) {
       return {
         success: true,
         message: `Verified attendance for ${targetStudent.name}. Red-flag warnings cleared for remaining meals!`,
@@ -498,16 +767,6 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Check if student has an active red flag for a specific day
-  const isStudentRedFlaggedForDay = (studentId: string, day: DayKey): boolean => {
-    const student = students.find((s) => s.id === studentId);
-    if (!student) return false;
-    if (!student.isRedFlagged) return false;
-
-    // If student selected lunch on this day and hasn't checked in, it turns RED
-    return !!student.schedule[day]?.lunchSelected && !student.schedule[day]?.lunchCheckedIn;
-  };
-
   return (
     <MealAppContext.Provider
       value={{
@@ -515,6 +774,7 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
         currentUser,
         loginAsRole,
         logout,
+        backendOnline,
         systemDay,
         setSystemDay,
         toggleFridaySimulation,
@@ -530,12 +790,12 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
         deleteChef,
         studentSchedule,
         toggleStudentLunch,
+        refreshStudentData,
         students,
         chefs,
         markChefBreakfast,
         markChefDinner,
         markChefLunchStatus,
-        isStudentRedFlaggedForDay,
       }}
     >
       {children}

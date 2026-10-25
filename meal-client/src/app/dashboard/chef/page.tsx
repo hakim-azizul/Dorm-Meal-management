@@ -17,6 +17,8 @@ import {
   UserCheck,
   UserX,
   Sparkles,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 
 export default function ChefDashboard() {
@@ -28,6 +30,7 @@ export default function ChefDashboard() {
     markChefBreakfast,
     markChefDinner,
     markChefLunchStatus,
+    backendOnline,
   } = useMealApp();
 
   const [activeSession, setActiveSession] = useState<"breakfast" | "lunch" | "dinner">("lunch");
@@ -65,14 +68,31 @@ export default function ChefDashboard() {
   ).length;
   const activeRedFlagCount = displayedStudents.filter((s) => s.isRedFlagged).length;
 
-  const handleLunchStatus = (studentId: string, status: "present" | "absent") => {
-    const res = markChefLunchStatus(studentId, status);
-    if (res.success) {
-      setNotification({ type: "success", text: res.message });
-    } else {
-      setNotification({ type: "error", text: res.message });
+  const handleLunchStatus = async (studentId: string, status: "present" | "absent") => {
+    try {
+      const res = await markChefLunchStatus(studentId, status);
+      if (res.success) {
+        setNotification({ type: "success", text: res.message });
+      } else {
+        setNotification({ type: "error", text: res.message });
+      }
+    } catch (err: any) {
+      setNotification({ type: "error", text: err.message || "Failed to update attendance." });
+    } finally {
+      setTimeout(() => setNotification(null), 4500);
     }
-    setTimeout(() => setNotification(null), 4500);
+  };
+
+  const handleBreakfastCheckIn = async (studentId: string) => {
+    await markChefBreakfast(studentId);
+    setNotification({ type: "success", text: "Breakfast attendance verified." });
+    setTimeout(() => setNotification(null), 3000);
+  };
+
+  const handleDinnerCheckIn = async (studentId: string) => {
+    await markChefDinner(studentId);
+    setNotification({ type: "success", text: "Dinner attendance verified." });
+    setTimeout(() => setNotification(null), 3000);
   };
 
   return (
@@ -90,6 +110,17 @@ export default function ChefDashboard() {
               </h1>
               <span className="badge badge-accent badge-sm font-bold uppercase py-2.5 px-3">
                 {t("todayOnlyBadge")}
+              </span>
+              <span
+                className={`badge badge-xs font-bold gap-1 py-2 px-2.5 ${
+                  backendOnline
+                    ? "badge-success badge-outline text-emerald-600"
+                    : "badge-ghost opacity-60"
+                }`}
+                title={backendOnline ? "Connected to Express Backend (Port 5000)" : "Running in Local Simulation Mode"}
+              >
+                {backendOnline ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+                <span>{backendOnline ? "API Online" : "Local Mode"}</span>
               </span>
             </div>
             <p className="text-xs sm:text-sm text-base-content/70 mt-1">
@@ -394,7 +425,7 @@ export default function ChefDashboard() {
                             </span>
                           ) : (
                             <button
-                              onClick={() => markChefBreakfast(student.id)}
+                              onClick={() => handleBreakfastCheckIn(student.id)}
                               className="btn btn-xs btn-accent text-accent-content font-bold gap-1 shadow-xs"
                             >
                               <UserCheck className="w-3.5 h-3.5" />
@@ -409,7 +440,7 @@ export default function ChefDashboard() {
                             </span>
                           ) : (
                             <button
-                              onClick={() => markChefDinner(student.id)}
+                              onClick={() => handleDinnerCheckIn(student.id)}
                               className="btn btn-xs btn-accent text-accent-content font-bold gap-1 shadow-xs"
                             >
                               <UserCheck className="w-3.5 h-3.5" />

@@ -18,10 +18,12 @@ import {
   ShieldAlert,
   Info,
   CalendarDays,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 
 export default function StudentDashboard() {
-  const { t, language } = useLanguage();
+  const { t } = useLanguage();
   const {
     currentUser,
     studentSchedule,
@@ -31,24 +33,35 @@ export default function StudentDashboard() {
     systemDay,
     toggleFridaySimulation,
     todayDateFormatted,
+    backendOnline,
   } = useMealApp();
 
   const [notification, setNotification] = useState<{
     type: "success" | "error";
     text: string;
   } | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
 
-  const handleLunchCheckboxChange = (day: DayKey) => {
-    const res = toggleStudentLunch(day);
-    if (res.success) {
-      setNotification({ type: "success", text: res.message });
-    } else {
-      setNotification({ type: "error", text: res.message });
+  const handleLunchCheckboxChange = async (day: DayKey) => {
+    setIsUpdating(true);
+    try {
+      const res = await toggleStudentLunch(day);
+      if (res.success) {
+        setNotification({ type: "success", text: res.message });
+      } else {
+        setNotification({ type: "error", text: res.message });
+      }
+    } catch (err: any) {
+      setNotification({ type: "error", text: err.message || "Failed to update lunch selection" });
+    } finally {
+      setIsUpdating(false);
+      setTimeout(() => setNotification(null), 4000);
     }
-    setTimeout(() => setNotification(null), 4000);
   };
 
   const selectedLunchesCount = studentSchedule.filter((d) => d.lunch.selected).length;
+  const isStudentBlocked = currentUser?.isBlocked;
+  const isCanModifyLunch = isFriday && !isGlobalLocked && !isStudentBlocked;
 
   return (
     <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 max-w-7xl">
@@ -63,7 +76,7 @@ export default function StudentDashboard() {
               <h1 className="text-2xl sm:text-3xl font-black text-base-content">
                 {currentUser?.name || "Ahmed Al-Mansoor"}
               </h1>
-              {currentUser?.isPenalized ? (
+              {isStudentBlocked ? (
                 <span className="badge badge-error gap-1 text-xs font-bold py-2.5 px-3 text-white">
                   <ShieldAlert className="w-3.5 h-3.5" />
                   Meal Selection Suspended
@@ -79,6 +92,19 @@ export default function StudentDashboard() {
                   Active Resident
                 </span>
               )}
+
+              {/* API Connection Indicator */}
+              <span
+                className={`badge badge-xs font-bold gap-1 py-2 px-2.5 ${
+                  backendOnline
+                    ? "badge-success badge-outline text-emerald-600"
+                    : "badge-ghost opacity-60"
+                }`}
+                title={backendOnline ? "Connected to Express Backend (Port 5000)" : "Running in Local Simulation Mode"}
+              >
+                {backendOnline ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+                <span>{backendOnline ? "API Online" : "Local Mode"}</span>
+              </span>
             </div>
             <p className="text-xs sm:text-sm text-base-content/70 mt-1">
               {t("room")}: <strong className="text-base-content">{currentUser?.room || "A-204"}</strong> • {currentUser?.email}
@@ -116,7 +142,7 @@ export default function StudentDashboard() {
       </div>
 
       {/* REAL-TIME WARNING BANNER 1: Disciplinary Punishment / Admin Block */}
-      {currentUser?.isPenalized && (
+      {isStudentBlocked && (
         <div className="alert alert-error mb-6 shadow-md border border-rose-300">
           <ShieldAlert className="w-6 h-6 shrink-0 text-white" />
           <div className="text-white">
@@ -126,7 +152,7 @@ export default function StudentDashboard() {
             <p className="text-xs sm:text-sm mt-0.5 opacity-90">
               {t("punishmentAlertMsg")}
             </p>
-            {currentUser.penaltyReason && (
+            {currentUser?.penaltyReason && (
               <div className="mt-1.5 text-xs font-semibold bg-white/10 px-2.5 py-1 rounded-lg w-fit">
                 Notice: {currentUser.penaltyReason}
               </div>
@@ -195,12 +221,12 @@ export default function StudentDashboard() {
         <div className="flex items-center gap-2 shrink-0">
           <span
             className={`badge font-extrabold text-xs py-3 px-3 ${
-              isFriday && !isGlobalLocked && !currentUser?.isPenalized
+              isCanModifyLunch
                 ? "badge-success text-success-content"
                 : "badge-error text-white"
             }`}
           >
-            {isFriday && !isGlobalLocked && !currentUser?.isPenalized
+            {isCanModifyLunch
               ? t("fridayOpenBadge")
               : t("fridayLockedBadge")}
           </span>
@@ -215,7 +241,6 @@ export default function StudentDashboard() {
         {studentSchedule.map((dayItem) => {
           const dayKey = dayItem.day;
           const isLunchSelected = dayItem.lunch.selected;
-          const isCanModifyLunch = isFriday && !isGlobalLocked && !currentUser?.isPenalized;
           const isToday = systemDay === dayKey;
           const isMissedRedFlagDay = currentUser?.isRedFlagged && isLunchSelected;
 
@@ -302,7 +327,7 @@ export default function StudentDashboard() {
                   {/* Interactive Checkbox Control (ONLY enabled on Friday) */}
                   <label
                     className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer ${
-                      !isCanModifyLunch
+                      !isCanModifyLunch || isUpdating
                         ? "bg-base-200/60 border-base-300 opacity-70 cursor-not-allowed"
                         : isLunchSelected
                         ? "bg-primary/10 border-primary/40 text-primary"
@@ -313,7 +338,7 @@ export default function StudentDashboard() {
                       <input
                         type="checkbox"
                         checked={isLunchSelected}
-                        disabled={!isCanModifyLunch}
+                        disabled={!isCanModifyLunch || isUpdating}
                         onChange={() => handleLunchCheckboxChange(dayKey)}
                         className={`checkbox checkbox-sm ${
                           isLunchSelected ? "checkbox-primary" : "checkbox-neutral"
