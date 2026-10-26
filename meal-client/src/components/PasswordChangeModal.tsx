@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useMealApp } from "@/context/MealAppContext";
-import { KeyRound, CheckCircle2, AlertCircle, Eye, EyeOff, ShieldCheck, X } from "lucide-react";
+import { KeyRound, CheckCircle2, AlertCircle, Eye, EyeOff, ShieldCheck, X, Sparkles } from "lucide-react";
 
 export function PasswordChangeModal({
   isOpen,
@@ -12,6 +12,7 @@ export function PasswordChangeModal({
   isOpen: boolean;
   onClose: () => void;
 }) {
+  const { t, language } = useLanguage();
   const { currentUser, changePassword } = useMealApp();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -22,6 +23,10 @@ export function PasswordChangeModal({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   if (!isOpen) return null;
+
+  const handleUseDefaultPassword = () => {
+    setCurrentPassword("Dorm@1234");
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,7 +44,7 @@ export function PasswordChangeModal({
     }
 
     setIsLoading(true);
-    const res = await changePassword(newPassword, currentPassword);
+    const res = await changePassword(newPassword, currentPassword || undefined);
     setIsLoading(false);
 
     if (res.success) {
@@ -50,11 +55,13 @@ export function PasswordChangeModal({
         setNewPassword("");
         setConfirmPassword("");
         setSuccessMsg(null);
-      }, 1800);
+      }, 1600);
     } else {
       setErrorMsg(res.message || "Failed to update password.");
     }
   };
+
+  const passwordsMatch = newPassword.length > 0 && confirmPassword.length > 0 && newPassword === confirmPassword;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200">
@@ -65,16 +72,16 @@ export function PasswordChangeModal({
       >
         {/* Modal Header */}
         <div className="flex items-center justify-between pb-4 border-b border-base-200">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shadow-xs">
               <KeyRound className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-extrabold text-base text-base-content leading-none">
+              <h3 className="font-extrabold text-base text-base-content leading-tight">
                 Update Account Password
               </h3>
-              <span className="text-[11px] text-base-content/60">
-                Secure your meal portal account
+              <span className="text-xs text-base-content/60">
+                Secure your meal portal credentials
               </span>
             </div>
           </div>
@@ -90,39 +97,55 @@ export function PasswordChangeModal({
         {/* Modal Body / Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           {currentUser?.isPasswordReset && (
-            <div className="p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-xs text-amber-800 dark:text-amber-200 flex items-start gap-2.5 leading-relaxed">
-              <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-              <span>
-                Default system password (<strong className="font-mono font-bold">Dorm@1234</strong>) is active. Please set a personal password to keep your account secure.
-              </span>
+            <div className="p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-xs text-amber-900 dark:text-amber-200 flex flex-col gap-2">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <span>
+                  Default password (<strong className="font-mono font-bold">Dorm@1234</strong>) is currently active.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleUseDefaultPassword}
+                className="btn btn-xs btn-outline border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 w-fit self-end gap-1"
+              >
+                <Sparkles className="w-3 h-3" />
+                <span>Auto-fill Default Password</span>
+              </button>
             </div>
           )}
 
           {errorMsg && (
-            <div className="alert alert-error text-xs py-2.5 px-3 rounded-2xl text-white flex items-center gap-2">
+            <div className="alert alert-error text-xs py-2.5 px-3 rounded-2xl text-white flex items-center gap-2 shadow-xs">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{errorMsg}</span>
             </div>
           )}
 
           {successMsg && (
-            <div className="alert alert-success text-xs py-2.5 px-3 rounded-2xl text-white flex items-center gap-2">
+            <div className="alert alert-success text-xs py-2.5 px-3 rounded-2xl text-white flex items-center gap-2 shadow-xs">
               <CheckCircle2 className="w-4 h-4 shrink-0" />
               <span>{successMsg}</span>
             </div>
           )}
 
+          {/* Current Password Field */}
           <div className="form-control">
             <label className="label py-1">
               <span className="label-text font-bold text-xs">Current Password</span>
+              {currentUser?.isPasswordReset && (
+                <span className="label-text-alt text-[11px] text-base-content/60">
+                  (Default: Dorm@1234)
+                </span>
+              )}
             </label>
             <div className="relative">
               <input
                 type={showPassword ? "text" : "password"}
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
-                placeholder="Default: Dorm@1234"
-                className="input input-sm input-bordered w-full pr-10 text-xs font-medium focus:input-primary"
+                placeholder={currentUser?.isPasswordReset ? "Enter Dorm@1234" : "Enter current password"}
+                className="input input-sm input-bordered w-full pr-10 text-xs font-medium focus:input-primary rounded-xl"
               />
               <button
                 type="button"
@@ -135,23 +158,31 @@ export function PasswordChangeModal({
             </div>
           </div>
 
+          {/* New Password Field */}
           <div className="form-control">
             <label className="label py-1">
               <span className="label-text font-bold text-xs">New Password</span>
+              <span className="label-text-alt text-[10px] text-base-content/50">Min 6 characters</span>
             </label>
             <input
               type={showPassword ? "text" : "password"}
               required
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Minimum 6 characters"
-              className="input input-sm input-bordered text-xs font-medium focus:input-primary"
+              placeholder="Enter strong new password"
+              className="input input-sm input-bordered text-xs font-medium focus:input-primary rounded-xl"
             />
           </div>
 
+          {/* Confirm New Password Field */}
           <div className="form-control">
             <label className="label py-1">
               <span className="label-text font-bold text-xs">Confirm New Password</span>
+              {passwordsMatch && (
+                <span className="label-text-alt text-[10px] font-bold text-emerald-600 flex items-center gap-0.5">
+                  <CheckCircle2 className="w-3 h-3" /> Matches
+                </span>
+              )}
             </label>
             <input
               type={showPassword ? "text" : "password"}
@@ -159,7 +190,11 @@ export function PasswordChangeModal({
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="Re-type new password"
-              className="input input-sm input-bordered text-xs font-medium focus:input-primary"
+              className={`input input-sm input-bordered text-xs font-medium rounded-xl ${
+                confirmPassword.length > 0 && !passwordsMatch
+                  ? "input-error"
+                  : "focus:input-primary"
+              }`}
             />
           </div>
 

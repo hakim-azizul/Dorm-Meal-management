@@ -18,7 +18,6 @@ import {
   UserX,
   Sparkles,
   Wifi,
-  WifiOff,
 } from "lucide-react";
 
 export default function ChefDashboard() {

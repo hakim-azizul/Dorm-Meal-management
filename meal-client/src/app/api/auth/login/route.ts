@@ -46,12 +46,22 @@ export async function POST(req: Request) {
       isPasswordReset: user.isPasswordReset ?? false,
     };
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       message: "Login successful.",
       user: userObj,
       role: user.role,
     });
+
+    response.cookies.set("meal_session", JSON.stringify(userObj), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+    });
+
+    return response;
   } catch (error: any) {
     console.error("Local Next.js /api/auth/login error:", error);
     return NextResponse.json(

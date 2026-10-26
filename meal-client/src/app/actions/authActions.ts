@@ -3,6 +3,7 @@
 import { getDatabase } from "@/lib/mongodb";
 import bcrypt from "bcryptjs";
 import { ObjectId } from "mongodb";
+import { cookies } from "next/headers";
 
 export type Role = "student" | "admin" | "chef";
 
@@ -100,6 +101,20 @@ export async function loginAction(
       isPasswordReset: user.isPasswordReset ?? false,
     };
 
+    // Set server-side session cookie for edge middleware and SSR route protection
+    try {
+      const cookieStore = await cookies();
+      cookieStore.set("meal_session", JSON.stringify(userSession), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 7, // 7 days
+      });
+    } catch (cookieError) {
+      console.warn("Could not set session cookie:", cookieError);
+    }
+
     return {
       success: true,
       role: user.role as Role,
@@ -111,6 +126,123 @@ export async function loginAction(
     return {
       success: false,
       message: "Unable to connect to the authentication service. Please try again.",
+    };
+  }
+}
+
+/**
+ * Direct Database Action to Logout and clear session cookie
+ */
+export async function logoutAction(): Promise<{ success: boolean }> {
+  try {
+    const cookieStore = await cookies();
+    cookieStore.delete("meal_session");
+    return { success: true };
+  } catch {
+    return { success: false };
+  }
+}
+
+/**
+ * Direct Database Action to Get Current Session from server-side cookie
+ */
+export async function getSessionAction(): Promise<UserSessionData | null> {
+  try {
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get("meal_session");
+    if (!sessionCookie?.value) return null;
+    return JSON.parse(sessionCookie.value) as UserSessionData;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Direct Database Action for User to Update / Change Their Password
+ * Securely hashes new password with bcryptjs and flips isPasswordReset to false
+ */
+export async function updatePasswordAction(payload: {
+  userId: string;
+  currentPassword?: string;
+  newPassword: string;
+}): Promise<{ success: boolean; message: string }> {
+  try {
+    const { userId, currentPassword, newPassword } = payload;
+
+    if (!userId) {
+      return { success: false, message: "User ID is required." };
+    }
+
+    if (!newPassword || newPassword.length < 6) {
+      return { success: false, message: "New password must be at least 6 characters long." };
+    }
+
+    const db = await getDatabase();
+    const objId = new ObjectId(userId);
+    const user = await db.collection("users").findOne({ _id: objId });
+
+    if (!user) {
+      return { success: false, message: "User account not found." };
+    }
+
+    // If current password provided, verify it
+    if (currentPassword && user.password) {
+      const isMatch = await bcrypt.compare(currentPassword, user.password);
+      if (!isMatch) {
+        return { success: false, message: "Current password does not match our records." };
+      }
+    } else if (!user.isPasswordReset && user.password) {
+      // If user had already changed their password before, require current password
+      return { success: false, message: "Current password is required to set a new password." };
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    await db.collection("users").updateOne(
+      { _id: objId },
+      {
+        $set: {
+          password: hashedPassword,
+          isPasswordReset: false,
+          updatedAt: new Date(),
+        },
+      }
+    );
+
+    // Update session cookie if active
+    try {
+      const cookieStore = await cookies();
+      const existingCookie = cookieStore.get("meal_session");
+      if (existingCookie?.value) {
+        const parsed = JSON.parse(existingCookie.value);
+        if (parsed.id === userId) {
+          cookieStore.set(
+            "meal_session",
+            JSON.stringify({ ...parsed, isPasswordReset: false }),
+            {
+              httpOnly: true,
+              secure: process.env.NODE_ENV === "production",
+              sameSite: "lax",
+              path: "/",
+              maxAge: 60 * 60 * 24 * 7,
+            }
+          );
+        }
+      }
+    } catch {
+      // Non-critical if cookie cannot be updated immediately
+    }
+
+    return {
+      success: true,
+      message: "Password updated successfully. Default password is no longer active.",
+    };
+  } catch (error: any) {
+    console.error("Direct MongoDB updatePasswordAction Error:", error);
+    return {
+      success: false,
+      message: error.message || "Failed to update password in database.",
     };
   }
 }

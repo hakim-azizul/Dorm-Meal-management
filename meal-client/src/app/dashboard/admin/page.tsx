@@ -20,7 +20,6 @@ import {
   KeyRound,
   RotateCcw,
   Wifi,
-  WifiOff,
 } from "lucide-react";
 
 const DAYS: DayKey[] = ["sat", "sun", "mon", "tue", "wed", "thu", "fri"];

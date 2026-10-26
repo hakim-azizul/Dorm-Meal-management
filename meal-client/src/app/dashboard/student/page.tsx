@@ -121,8 +121,8 @@ export default function StudentDashboard() {
 
         {/* Operating Window Status & Quick Friday Simulator */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-          <div className="p-3 rounded-2xl bg-base-100 border border-base-300 text-xs">
-            <div className="text-[11px] font-bold text-base-content/60 uppercase">
+          <div className="p-3.5 rounded-2xl bg-base-100 border border-base-300 text-xs shadow-xs">
+            <div className="text-[11px] font-bold text-base-content/60 uppercase tracking-wider">
               Current System Time
             </div>
             <div className="font-extrabold text-sm text-primary flex items-center gap-1.5 mt-0.5">
@@ -131,20 +131,24 @@ export default function StudentDashboard() {
             </div>
           </div>
 
-          <button
-            onClick={toggleFridaySimulation}
-            className={`btn btn-sm gap-2 font-bold transition-all border ${
-              isFriday
-                ? "bg-emerald-600 text-white border-emerald-700 hover:bg-emerald-700"
-                : "bg-base-100 text-base-content border-base-300 hover:bg-base-200"
-            }`}
-            title="Toggle between Friday (selection window open) and Monday (selection window closed)"
-          >
-            <Clock className="w-4 h-4" />
-            <span>
-              {isFriday ? t("simulateOtherDay") : t("simulateFriday")}
-            </span>
-          </button>
+          {/* Dev-Only Friday Simulation Toggle */}
+          {process.env.NODE_ENV !== "production" && (
+            <button
+              onClick={toggleFridaySimulation}
+              className={`btn btn-sm gap-2 font-bold transition-all border shadow-xs ${
+                isFriday
+                  ? "bg-emerald-600 text-white border-emerald-700 hover:bg-emerald-700"
+                  : "bg-base-100 text-base-content border-base-300 hover:bg-base-200"
+              }`}
+              title="Dev Mode: Toggle between Friday (window open) and Monday (window closed)"
+            >
+              <span className="badge badge-xs badge-warning uppercase font-mono font-bold text-[9px]">Dev</span>
+              <Clock className="w-4 h-4" />
+              <span>
+                {isFriday ? t("simulateOtherDay") : t("simulateFriday")}
+              </span>
+            </button>
+          )}
         </div>
       </div>
 

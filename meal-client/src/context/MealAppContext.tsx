@@ -4,9 +4,12 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import * as api from "@/lib/api";
 import {
   loginAction,
+  logoutAction,
+  getSessionAction,
   createUserAction,
   deleteUserAction,
   resetPasswordAction,
+  updatePasswordAction,
   getAllUsersAction,
   UserSessionData,
 } from "@/app/actions/authActions";
@@ -116,10 +119,16 @@ const MealAppContext = createContext<MealAppContextType | undefined>(undefined);
 const DAYS: DayKey[] = ["sat", "sun", "mon", "tue", "wed", "thu", "fri"];
 
 export function MealAppProvider({ children }: { children: React.ReactNode }) {
+  const getInitialDayKey = (): DayKey => {
+    const day = new Date().getDay();
+    const map: Record<number, DayKey> = { 0: "sun", 1: "mon", 2: "tue", 3: "wed", 4: "thu", 5: "fri", 6: "sat" };
+    return map[day] || "mon";
+  };
+
   const [currentUserData, setCurrentUserData] = useState<UserSessionData | null>(null);
   const [isHydrated, setIsHydrated] = useState<boolean>(false);
   const [backendOnline, setBackendOnline] = useState<boolean>(true);
-  const [systemDay, setSystemDay] = useState<DayKey>("mon");
+  const [systemDay, setSystemDay] = useState<DayKey>(getInitialDayKey);
   const [isGlobalLocked, setIsGlobalLocked] = useState<boolean>(false);
 
   const [students, setStudents] = useState<StudentRecord[]>([]);
@@ -129,19 +138,29 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
 
   // 1. Hydrate User Session safely on client mount without UI flashing
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("meal_user_session");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed?.id && parsed?.role) {
-          setCurrentUserData(parsed);
+    async function hydrateSession() {
+      try {
+        const saved = localStorage.getItem("meal_user_session");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed?.id && parsed?.role) {
+            setCurrentUserData(parsed);
+            return;
+          }
         }
+        // Fallback to server-side session cookie if localStorage is empty
+        const serverSession = await getSessionAction();
+        if (serverSession?.id && serverSession?.role) {
+          setCurrentUserData(serverSession);
+          localStorage.setItem("meal_user_session", JSON.stringify(serverSession));
+        }
+      } catch {
+        localStorage.removeItem("meal_user_session");
+      } finally {
+        setIsHydrated(true);
       }
-    } catch {
-      localStorage.removeItem("meal_user_session");
-    } finally {
-      setIsHydrated(true);
     }
+    hydrateSession();
   }, []);
 
   // 2. Persist session updates
@@ -331,17 +350,22 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Real Password Change
+  // Real Password Change directly via Server Action
   const changePassword = async (newPassword: string, currentPassword?: string) => {
     if (!currentUserData?.id) return { success: false, message: "No active user session." };
     try {
-      const res = await api.changeUserPassword({
+      const res = await updatePasswordAction({
         userId: currentUserData.id,
         currentPassword,
         newPassword,
       });
       if (res.success) {
-        setCurrentUserData((prev) => (prev ? { ...prev, isPasswordReset: false } : null));
+        setCurrentUserData((prev) => {
+          if (!prev) return null;
+          const updated = { ...prev, isPasswordReset: false };
+          localStorage.setItem("meal_user_session", JSON.stringify(updated));
+          return updated;
+        });
         return { success: true, message: res.message };
       }
       return { success: false, message: res.message || "Password update failed." };
@@ -350,18 +374,39 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await logoutAction();
+    } catch (err) {
+      console.warn("Logout action error:", err);
+    }
     setCurrentUserData(null);
+    localStorage.removeItem("meal_user_session");
   };
 
+  // Production Gating:
+  // In production, isFriday is strictly real Friday (getDay() === 5).
+  // In development, developer simulation toggle allows toggling between simulated Friday and normal day.
+  const isRealFriday = typeof window !== "undefined" ? new Date().getDay() === 5 : false;
+  const isProduction = process.env.NODE_ENV === "production";
+
   const toggleFridaySimulation = () => {
+    if (isProduction) return; // Strictly locked in production
     setSystemDay((prev) => (prev === "fri" ? "mon" : "fri"));
   };
 
-  const isFriday = systemDay === "fri";
+  const isFriday = isProduction ? isRealFriday : systemDay === "fri";
+  
+  const formattedToday = new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+
   const todayDateFormatted = isFriday
-    ? "Friday, Oct 30, 2026 (Selection Window)"
-    : "Monday, Oct 26, 2026 (Operating Day)";
+    ? `${formattedToday} (Selection Window Open)`
+    : `${formattedToday} (Regular Operating Day)`;
 
   // Active student record
   const activeStudent: StudentRecord =
