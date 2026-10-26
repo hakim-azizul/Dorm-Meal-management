@@ -150,7 +150,7 @@ export function Navbar() {
           {currentUser ? (
             <div className="flex items-center gap-2">
               <div className="hidden sm:flex flex-col text-right">
-                <span className="text-xs font-bold text-base-content truncate max-w-[130px]">
+                <span className="text-xs font-bold text-base-content truncate max-w-32.5">
                   {currentUser.name}
                 </span>
                 <span className="text-[10px] text-base-content/60 capitalize">
