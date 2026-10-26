@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import * as api from "@/lib/api";
+import { loginAction, UserSessionData } from "@/app/actions/authActions";
 
 export type Role = "student" | "admin" | "chef";
 export type DayKey = "sat" | "sun" | "mon" | "tue" | "wed" | "thu" | "fri";
@@ -52,18 +53,7 @@ export interface ChefRecord {
 interface MealAppContextType {
   // Authentication & Session
   currentRole: Role | null;
-  currentUser: {
-    id: string;
-    name: string;
-    email: string;
-    role: Role;
-    room?: string;
-    shift?: string;
-    isBlocked?: boolean;
-    penaltyReason?: string;
-    isRedFlagged?: boolean;
-    isPasswordReset?: boolean;
-  } | null;
+  currentUser: UserSessionData | null;
   loginWithCredentials: (email: string, password: string) => Promise<{ success: boolean; role?: Role; message?: string }>;
   changePassword: (newPassword: string, currentPassword?: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => void;
@@ -108,7 +98,7 @@ const MealAppContext = createContext<MealAppContextType | undefined>(undefined);
 const DAYS: DayKey[] = ["sat", "sun", "mon", "tue", "wed", "thu", "fri"];
 
 export function MealAppProvider({ children }: { children: React.ReactNode }) {
-  const [currentUserData, setCurrentUserData] = useState<MealAppContextType["currentUser"]>(() => {
+  const [currentUserData, setCurrentUserData] = useState<UserSessionData | null>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("meal_user_session");
       if (saved) {
@@ -296,33 +286,31 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [currentUserData?.role, refreshStudentData]);
 
-  // Real Database Login with Email & Password
+  /**
+   * Direct Database Login Action via Next.js Server Action
+   * Runs directly against MongoDB Atlas, avoiding port 5000 fetch issues.
+   */
   const loginWithCredentials = async (
     email: string,
     password: string
   ): Promise<{ success: boolean; role?: Role; message?: string }> => {
     try {
-      const res = await api.loginUser({ email, password });
-      if (res.success && res.user) {
-        const u = res.user;
-        const userSession: MealAppContextType["currentUser"] = {
-          id: u.id || u._id,
-          name: u.name,
-          email: u.email,
-          role: u.role,
-          room: u.room,
-          shift: u.shift,
-          isBlocked: u.isBlocked,
-          penaltyReason: u.penaltyReason,
-          isRedFlagged: u.isRedFlagged,
-          isPasswordReset: u.isPasswordReset,
-        };
-        setCurrentUserData(userSession);
-        return { success: true, role: u.role };
+      const result = await loginAction(email, password);
+
+      if (result.success && result.user) {
+        setCurrentUserData(result.user);
+        return { success: true, role: result.role };
       }
-      return { success: false, message: res.message || "Invalid credentials." };
-    } catch (err: any) {
-      return { success: false, message: err.message || "Failed to log in." };
+
+      return {
+        success: false,
+        message: result.message || "Invalid email or password.",
+      };
+    } catch {
+      return {
+        success: false,
+        message: "Authentication service currently unavailable. Please check your database connection.",
+      };
     }
   };
 
