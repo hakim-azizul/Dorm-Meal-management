@@ -655,3 +655,43 @@ npm run seed
 - [ ] **Chef strict lunch filter verification**: Confirm that Khalid Bin Ziyad (no Monday lunch selection) does NOT appear in the Chef Lunch tab on Mondays.
 - [ ] **Red-flag end-to-end test**: Mark a student absent for lunch via the Chef dashboard, then verify the student's dashboard shows the red-flag warning banner.
 - [ ] **Git setup**: Initialize a git repository, set up `.gitignore` (already exists in both subdirectories), and make the initial commit.
+
+
+
+# Hostel Dining System - Project Status & Roadmap (Agent Context)
+
+## What Is Already Production-Ready
+
+### 1. Architecture & Database Integration
+- Direct connection to MongoDB Atlas via native client connection caching in Next.js Server Actions.
+- Clean, secure password hashing with `bcryptjs` (salt rounds = 10).
+- TTL indexes configured for 365-day automated data retention.
+
+### 2. Business Rules & Workflows
+- Unified role-agnostic login that dynamically routes users to `/dashboard/admin`, `/dashboard/chef`, or `/dashboard/student`.
+- Admin user management: creation with default password (`Dorm@1234`), password reset capability, meal overrides, and global lock toggle.
+- Student Friday-only lunch selection constraints with real-time disciplinary block/red-flag banners.
+- Chef daily attendance module strictly filtering students who pre-selected lunch.
+
+### 3. Build & Type Health
+- Passes `next build --webpack` with zero TypeScript or bundling errors.
+
+---
+
+## Critical Gaps Before Serving Real Users
+
+| Area | Current State | Requirement for Real Production |
+| :--- | :--- | :--- |
+| **Route Protection (Middleware)** | Dashboards rely on client-side state hydration (`localStorage`). An unauthenticated user can directly type `/dashboard/admin` in the URL. | Need a Next.js middleware or server-side session cookie (JWT/`httpOnly`) to guard routes at the edge. |
+| **Friday Simulation Toggle** | The student dashboard still contains a developer toggle (`simulateFriday`) in the UI. | Must be hidden or disabled when `NODE_ENV === "production"` so students cannot bypass the Friday rule in live service. |
+| **Audit Logs & Recovery** | Actions execute directly against MongoDB without audit history. | Admin actions (blocking a student, meal overrides) should ideally write to an `AuditLog` collection. |
+| **Rate Limiting & Brute Force** | The login Server Action does not rate-limit repeated bad passwords. | Add a rate limiter (e.g., Upstash Redis or a simple Mongo attempt counter) to prevent brute-force attacks on the single login form. |
+| **HTTPS & Production Env** | Running locally with `localhost` URLs. | Configure custom domain, SSL, production environment variables (`NEXT_PUBLIC_APP_URL`, production DB URI with restricted IP whitelist), and deployment host (Vercel, AWS, or Docker). |
+
+---
+
+## Recommended Next Steps to Launch
+1. **Add `middleware.ts`**: Protect `/dashboard/*` routes so unauthorized users are kicked back to `/login` immediately before rendering.
+2. **Gate Dev Toggles**: Wrap `toggleFridaySimulation` in `process.env.NODE_ENV !== "production"`.
+
+and go on to make it totally production prepared and ready fro serve users.
