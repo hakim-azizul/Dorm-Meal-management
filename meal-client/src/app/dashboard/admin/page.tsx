@@ -128,21 +128,27 @@ export default function AdminDashboard() {
     e.preventDefault();
     if (!newStudentName || !newStudentEmail || !newStudentRoom) return;
 
-    await addNewStudent({
+    const res = await addNewStudent({
       name: newStudentName,
       room: newStudentRoom,
       email: newStudentEmail,
     });
 
-    setNotification({
-      type: "success",
-      text: `Student ${newStudentName} registered with default password "Dorm@1234".`,
-    });
-
-    setShowAddStudentModal(false);
-    setNewStudentName("");
-    setNewStudentRoom("");
-    setNewStudentEmail("");
+    if (res.success) {
+      setNotification({
+        type: "success",
+        text: `Student ${newStudentName} registered with default password "Dorm@1234".`,
+      });
+      setShowAddStudentModal(false);
+      setNewStudentName("");
+      setNewStudentRoom("");
+      setNewStudentEmail("");
+    } else {
+      setNotification({
+        type: "error",
+        text: res.message || "Failed to create student.",
+      });
+    }
     setTimeout(() => setNotification(null), 5000);
   };
 
@@ -150,20 +156,26 @@ export default function AdminDashboard() {
     e.preventDefault();
     if (!newChefName || !newChefEmail) return;
 
-    await addNewChef({
+    const res = await addNewChef({
       name: newChefName,
       email: newChefEmail,
       shift: newChefShift,
     });
 
-    setNotification({
-      type: "success",
-      text: `Kitchen Chef ${newChefName} added with default password "Dorm@1234".`,
-    });
-
-    setShowAddChefModal(false);
-    setNewChefName("");
-    setNewChefEmail("");
+    if (res.success) {
+      setNotification({
+        type: "success",
+        text: `Kitchen Chef ${newChefName} added with default password "Dorm@1234".`,
+      });
+      setShowAddChefModal(false);
+      setNewChefName("");
+      setNewChefEmail("");
+    } else {
+      setNotification({
+        type: "error",
+        text: res.message || "Failed to create chef.",
+      });
+    }
     setTimeout(() => setNotification(null), 5000);
   };
 

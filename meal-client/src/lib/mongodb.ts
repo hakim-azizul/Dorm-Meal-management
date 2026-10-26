@@ -1,9 +1,10 @@
 import { MongoClient, Db } from "mongodb";
 
-const uri =
-  process.env.DB_URL ||
-  process.env.MONGODB_URI ||
-  "mongodb://weekly-meal:VpQhmt1QqG0mU55K@ac-vwgi4dy-shard-00-00.yleslu4.mongodb.net:27017,ac-vwgi4dy-shard-00-01.yleslu4.mongodb.net:27017,ac-vwgi4dy-shard-00-02.yleslu4.mongodb.net:27017/weekly-meal?ssl=true&replicaSet=atlas-ydwn0o-shard-0&authSource=admin";
+const uri = process.env.DB_URL || process.env.MONGODB_URI;
+
+if (!uri) {
+  throw new Error("Please define the DB_URL or MONGODB_URI environment variable inside .env");
+}
 
 let client: MongoClient | null = null;
 let clientPromise: Promise<MongoClient>;

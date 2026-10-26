@@ -2,7 +2,14 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import * as api from "@/lib/api";
-import { loginAction, UserSessionData } from "@/app/actions/authActions";
+import {
+  loginAction,
+  createUserAction,
+  deleteUserAction,
+  resetPasswordAction,
+  getAllUsersAction,
+  UserSessionData,
+} from "@/app/actions/authActions";
 
 export type Role = "student" | "admin" | "chef";
 export type DayKey = "sat" | "sun" | "mon" | "tue" | "wed" | "thu" | "fri";
@@ -80,9 +87,9 @@ interface MealAppContextType {
   chefs: ChefRecord[];
   toggleStudentPenalty: (studentId: string, reason?: string) => Promise<void>;
   adminOverrideStudentLunch: (studentId: string, day: DayKey) => Promise<void>;
-  addNewStudent: (student: { name: string; room: string; email: string }) => Promise<void>;
+  addNewStudent: (student: { name: string; room: string; email: string }) => Promise<{ success: boolean; message?: string }>;
   deleteStudent: (studentId: string) => Promise<void>;
-  addNewChef: (chef: { name: string; email: string; shift: string }) => Promise<void>;
+  addNewChef: (chef: { name: string; email: string; shift: string }) => Promise<{ success: boolean; message?: string }>;
   deleteChef: (chefId: string) => Promise<void>;
   adminResetPassword: (userId: string) => Promise<{ success: boolean; message: string }>;
   refreshAdminRoster: () => Promise<void>;
@@ -140,16 +147,16 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Fetch real users roster from MongoDB for Admin / Attendance
+  // Fetch real users roster directly from MongoDB Server Action
   const refreshAdminRoster = useCallback(async () => {
     try {
-      const res = await api.getUsers();
+      const res = await getAllUsersAction();
       if (res.success && Array.isArray(res.users)) {
-        const studentUsers = res.users.filter((u) => u.role === "student");
-        const chefUsers = res.users.filter((u) => u.role === "chef");
+        const studentUsers = res.users.filter((u: any) => u.role === "student");
+        const chefUsers = res.users.filter((u: any) => u.role === "chef");
 
         setStudents(
-          studentUsers.map((u) => ({
+          studentUsers.map((u: any) => ({
             id: u._id || u.id || "",
             name: u.name,
             room: u.room || "Room Unassigned",
@@ -176,7 +183,7 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
         );
 
         setChefs(
-          chefUsers.map((u) => ({
+          chefUsers.map((u: any) => ({
             id: u._id || u.id || "",
             name: u.name,
             email: u.email,
@@ -185,8 +192,8 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
           }))
         );
       }
-    } catch {
-      // Backend may be offline or starting up
+    } catch (err) {
+      console.error("Direct MongoDB refreshAdminRoster error:", err);
     }
   }, []);
 
@@ -271,7 +278,7 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
         );
       }
     } catch {
-      // Backend offline
+      // Offline fallback
     }
   }, [currentUserData?.id, currentUserData?.role]);
 
@@ -288,7 +295,6 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
 
   /**
    * Direct Database Login Action via Next.js Server Action
-   * Runs directly against MongoDB Atlas, avoiding port 5000 fetch issues.
    */
   const loginWithCredentials = async (
     email: string,
@@ -544,91 +550,105 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Admin adds new student with real DB creation and default hashed password "Dorm@1234"
+  // Admin adds new student directly via Server Action
   const addNewStudent = async (newStudent: { name: string; room: string; email: string }) => {
-    const res = await api.createUser({
-      name: newStudent.name,
-      room: newStudent.room,
-      email: newStudent.email,
-      role: "student",
-    });
+    try {
+      const res = await createUserAction({
+        name: newStudent.name,
+        room: newStudent.room,
+        email: newStudent.email,
+        role: "student",
+      });
 
-    if (res.success && res.user) {
-      const u = res.user;
-      const created: StudentRecord = {
-        id: u._id || u.id || "",
-        name: u.name,
-        room: u.room || newStudent.room,
-        email: u.email,
-        isBlocked: false,
-        isRedFlagged: false,
-        isPasswordReset: true,
-        schedule: {
-          sat: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
-          sun: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
-          mon: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
-          tue: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
-          wed: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
-          thu: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
-          fri: { lunchSelected: false, lunchCheckedIn: false, lunchMissed: false },
-        },
-        attendanceToday: {
-          breakfast: false,
-          lunch: "unmarked",
-          dinner: false,
-        },
-      };
+      if (res.success && res.user) {
+        const u = res.user;
+        const created: StudentRecord = {
+          id: u.id,
+          name: u.name,
+          room: u.room || newStudent.room,
+          email: u.email,
+          isBlocked: false,
+          isRedFlagged: false,
+          isPasswordReset: true,
+          schedule: {
+            sat: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
+            sun: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
+            mon: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
+            tue: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
+            wed: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
+            thu: { lunchSelected: true, lunchCheckedIn: false, lunchMissed: false },
+            fri: { lunchSelected: false, lunchCheckedIn: false, lunchMissed: false },
+          },
+          attendanceToday: {
+            breakfast: false,
+            lunch: "unmarked",
+            dinner: false,
+          },
+        };
 
-      setStudents((prev) => [created, ...prev]);
+        setStudents((prev) => [created, ...prev]);
+        return { success: true, message: res.message };
+      }
+      return { success: false, message: res.message };
+    } catch (err: any) {
+      return { success: false, message: err.message || "Failed to add student." };
     }
   };
 
+  // Admin deletes student via Server Action
   const deleteStudent = async (studentId: string) => {
     try {
-      await api.deleteUser(studentId);
+      await deleteUserAction(studentId);
     } catch (err) {
       console.error("Error deleting student in DB:", err);
     }
     setStudents((prev) => prev.filter((s) => s.id !== studentId));
   };
 
-  // Admin adds new chef with real DB creation and default hashed password "Dorm@1234"
+  // Admin adds new chef directly via Server Action
   const addNewChef = async (newChef: { name: string; email: string; shift: string }) => {
-    const res = await api.createUser({
-      name: newChef.name,
-      email: newChef.email,
-      role: "chef",
-      shift: newChef.shift,
-    });
+    try {
+      const res = await createUserAction({
+        name: newChef.name,
+        email: newChef.email,
+        role: "chef",
+        shift: newChef.shift,
+      });
 
-    if (res.success && res.user) {
-      const u = res.user;
-      setChefs((prev) => [
-        {
-          id: u._id || u.id || "",
-          name: u.name,
-          email: u.email,
-          shift: u.shift || newChef.shift,
-          isPasswordReset: true,
-        },
-        ...prev,
-      ]);
+      if (res.success && res.user) {
+        const u = res.user;
+        setChefs((prev) => [
+          {
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            shift: u.shift || newChef.shift,
+            isPasswordReset: true,
+          },
+          ...prev,
+        ]);
+        return { success: true, message: res.message };
+      }
+      return { success: false, message: res.message };
+    } catch (err: any) {
+      return { success: false, message: err.message || "Failed to add chef." };
     }
   };
 
+  // Admin deletes chef via Server Action
   const deleteChef = async (chefId: string) => {
     try {
-      await api.deleteUser(chefId);
+      await deleteUserAction(chefId);
     } catch (err) {
       console.error("Error deleting chef in DB:", err);
     }
     setChefs((prev) => prev.filter((c) => c.id !== chefId));
   };
 
-  // Admin Resets a user's password back to "Dorm@1234"
+  // Admin Resets a user's password directly via Server Action
   const adminResetPassword = async (userId: string): Promise<{ success: boolean; message: string }> => {
     try {
-      const res = await api.resetPasswordByAdmin(userId);
+      const res = await resetPasswordAction(userId);
       if (res.success) {
         setStudents((prev) =>
           prev.map((s) => (s.id === userId ? { ...s, isPasswordReset: true } : s))
@@ -636,9 +656,9 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
         setChefs((prev) =>
           prev.map((c) => (c.id === userId ? { ...c, isPasswordReset: true } : c))
         );
-        return { success: true, message: res.message || "Password successfully reset to default." };
+        return { success: true, message: res.message };
       }
-      return { success: false, message: res.message || "Password reset failed." };
+      return { success: false, message: res.message };
     } catch (err: any) {
       return { success: false, message: err.message || "Failed to reset password." };
     }
