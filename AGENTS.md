@@ -694,4 +694,4 @@ npm run seed
 1. **Add `middleware.ts`**: Protect `/dashboard/*` routes so unauthorized users are kicked back to `/login` immediately before rendering.
 2. **Gate Dev Toggles**: Wrap `toggleFridaySimulation` in `process.env.NODE_ENV !== "production"`.
 
-and go on to make it totally production prepared and ready fro serve users.
+and go on with rest unfnished task's and make it totally production prepared and ready for serve users.
