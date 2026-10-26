@@ -39,7 +39,7 @@ export default function AdminDashboard() {
     addNewChef,
     deleteChef,
     adminResetPassword,
-    backendOnline,
+    isHydrated,
   } = useMealApp();
 
   const [activeTab, setActiveTab] = useState<"students" | "chefs">("students");
@@ -197,6 +197,17 @@ export default function AdminDashboard() {
     setTimeout(() => setNotification(null), 5000);
   };
 
+  if (!isHydrated) {
+    return (
+      <div className="container mx-auto px-4 py-12 max-w-7xl flex items-center justify-center min-h-[50vh]">
+        <div className="flex flex-col items-center gap-3">
+          <span className="loading loading-spinner loading-lg text-primary" />
+          <span className="text-xs font-semibold text-base-content/60">Loading administration portal...</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 max-w-7xl">
       {/* Top Banner / Global Lock Controller */}
@@ -215,14 +226,11 @@ export default function AdminDashboard() {
                   Hostel Administration
                 </span>
                 <span
-                  className={`badge badge-xs font-bold gap-1 py-2 px-2.5 ${
-                    backendOnline
-                      ? "badge-success badge-outline text-emerald-600"
-                      : "badge-warning badge-outline text-amber-600"
-                  }`}
+                  className="badge badge-xs font-bold gap-1 py-2 px-2.5 badge-success badge-outline text-emerald-600"
+                  title="Connected to MongoDB Atlas Database"
                 >
-                  {backendOnline ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
-                  {backendOnline ? "Atlas Connected" : "Local Database"}
+                  <Wifi className="w-3 h-3" />
+                  <span>Database Online</span>
                 </span>
               </div>
               <p className="text-xs sm:text-sm text-base-content/60 mt-1">

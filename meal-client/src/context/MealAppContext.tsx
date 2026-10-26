@@ -10,9 +10,19 @@ import {
   getAllUsersAction,
   UserSessionData,
 } from "@/app/actions/authActions";
+import {
+  toggleGlobalLockAction,
+  getGlobalLockStatusAction,
+  selectStudentLunchAction,
+  getStudentSelectionAction,
+  toggleStudentBlockAction,
+  adminOverrideLunchAction,
+  checkInStudentAction,
+  DayKey,
+} from "@/app/actions/mealActions";
 
 export type Role = "student" | "admin" | "chef";
-export type DayKey = "sat" | "sun" | "mon" | "tue" | "wed" | "thu" | "fri";
+export type { DayKey };
 export type MealType = "breakfast" | "lunch" | "dinner";
 
 export interface StudentScheduleDay {
@@ -64,6 +74,7 @@ interface MealAppContextType {
   loginWithCredentials: (email: string, password: string) => Promise<{ success: boolean; role?: Role; message?: string }>;
   changePassword: (newPassword: string, currentPassword?: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => void;
+  isHydrated: boolean;
   backendOnline: boolean;
 
   // Operating Day & System State
@@ -105,20 +116,8 @@ const MealAppContext = createContext<MealAppContextType | undefined>(undefined);
 const DAYS: DayKey[] = ["sat", "sun", "mon", "tue", "wed", "thu", "fri"];
 
 export function MealAppProvider({ children }: { children: React.ReactNode }) {
-  const [currentUserData, setCurrentUserData] = useState<UserSessionData | null>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("meal_user_session");
-      if (saved) {
-        try {
-          return JSON.parse(saved);
-        } catch {
-          return null;
-        }
-      }
-    }
-    return null;
-  });
-
+  const [currentUserData, setCurrentUserData] = useState<UserSessionData | null>(null);
+  const [isHydrated, setIsHydrated] = useState<boolean>(false);
   const [backendOnline, setBackendOnline] = useState<boolean>(true);
   const [systemDay, setSystemDay] = useState<DayKey>("mon");
   const [isGlobalLocked, setIsGlobalLocked] = useState<boolean>(false);
@@ -128,26 +127,39 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
 
   const currentRole = currentUserData?.role || null;
 
-  // Save session to localStorage on change
+  // 1. Hydrate User Session safely on client mount without UI flashing
   useEffect(() => {
+    try {
+      const saved = localStorage.getItem("meal_user_session");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.id && parsed?.role) {
+          setCurrentUserData(parsed);
+        }
+      }
+    } catch {
+      localStorage.removeItem("meal_user_session");
+    } finally {
+      setIsHydrated(true);
+    }
+  }, []);
+
+  // 2. Persist session updates
+  useEffect(() => {
+    if (!isHydrated) return;
     if (currentUserData) {
       localStorage.setItem("meal_user_session", JSON.stringify(currentUserData));
     } else {
       localStorage.removeItem("meal_user_session");
     }
-  }, [currentUserData]);
+  }, [currentUserData, isHydrated]);
 
-  // Check backend health & fetch live data on mount
-  const checkBackendHealth = useCallback(async () => {
-    try {
-      const res = await fetch("http://localhost:5000/", { method: "GET" });
-      setBackendOnline(res.ok);
-    } catch {
-      setBackendOnline(false);
-    }
+  // 3. Load initial Global Lock state directly via Server Action
+  useEffect(() => {
+    getGlobalLockStatusAction().then((locked) => setIsGlobalLocked(locked));
   }, []);
 
-  // Fetch real users roster directly from MongoDB Server Action
+  // 4. Fetch roster data directly from MongoDB Server Action
   const refreshAdminRoster = useCallback(async () => {
     try {
       const res = await getAllUsersAction();
@@ -193,17 +205,17 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
         );
       }
     } catch (err) {
-      console.error("Direct MongoDB refreshAdminRoster error:", err);
+      console.error("refreshAdminRoster error:", err);
     }
   }, []);
 
-  // Fetch student meal plan from MongoDB
+  // 5. Fetch student weekly meal data directly via Server Action
   const refreshStudentData = useCallback(async () => {
     if (!currentUserData?.id || currentUserData.role !== "student") return;
     const studentId = currentUserData.id;
 
     try {
-      const res = await api.getMySelection(studentId);
+      const res = await getStudentSelectionAction(studentId);
       if (res.success && res.student) {
         setIsGlobalLocked(!!res.isGlobalLocked);
         const remoteSelections = res.selection?.lunchSelections || {};
@@ -277,15 +289,14 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
             : null
         );
       }
-    } catch {
-      // Offline fallback
+    } catch (err) {
+      console.error("refreshStudentData error:", err);
     }
   }, [currentUserData?.id, currentUserData?.role]);
 
   useEffect(() => {
-    checkBackendHealth();
     refreshAdminRoster();
-  }, [checkBackendHealth, refreshAdminRoster]);
+  }, [refreshAdminRoster]);
 
   useEffect(() => {
     if (currentUserData?.role === "student") {
@@ -388,14 +399,14 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
       }
     : null;
 
-  // Global Lock Toggle
+  // Global Lock Toggle directly via Server Action
   const toggleGlobalLock = async () => {
-    const nextLocked = !isGlobalLocked;
-    setIsGlobalLocked(nextLocked);
     try {
-      await api.toggleGlobalLock(nextLocked);
+      const nextLocked = !isGlobalLocked;
+      setIsGlobalLocked(nextLocked);
+      await toggleGlobalLockAction(nextLocked);
     } catch (err) {
-      console.error("Error setting global lock in DB:", err);
+      console.error("Error toggling global lock:", err);
     }
   };
 
@@ -415,7 +426,7 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
     };
   });
 
-  // Toggle student lunch choice
+  // Toggle student lunch choice directly via Server Action
   const toggleStudentLunch = async (day: DayKey): Promise<{ success: boolean; message: string }> => {
     if (!isFriday) {
       return {
@@ -441,7 +452,7 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
     const currentVal = activeStudent.schedule[day]?.lunchSelected ?? true;
     const newVal = !currentVal;
 
-    // Local optimistic update
+    // Optimistic local update
     setStudents((prev) =>
       prev.map((s) => {
         if (s.id === activeStudent.id) {
@@ -466,23 +477,22 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
         selectionsPayload[d] = d === day ? newVal : activeStudent.schedule[d]?.lunchSelected ?? true;
       });
 
-      await api.selectLunch({
+      const res = await selectStudentLunchAction({
         studentId: activeStudent.id,
-        weekStartDate: "2026-10-24",
         lunchSelections: selectionsPayload,
         simulateFriday: isFriday,
       });
-    } catch (err) {
-      console.error("Error updating lunch selection in DB:", err);
-    }
 
-    return {
-      success: true,
-      message: `Lunch choice for ${day.toUpperCase()} updated successfully in database.`,
-    };
+      return res;
+    } catch (err: any) {
+      return {
+        success: false,
+        message: err.message || "Failed to update lunch choice.",
+      };
+    }
   };
 
-  // Admin toggles individual student penalty / block
+  // Admin toggles individual student penalty / block via Server Action
   const toggleStudentPenalty = async (studentId: string, reason?: string) => {
     const student = students.find((s) => s.id === studentId);
     if (!student) return;
@@ -503,7 +513,7 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
     );
 
     try {
-      await api.toggleBlockStudent({
+      await toggleStudentBlockAction({
         studentId,
         isBlocked: newBlocked,
         reason: newBlocked ? reason : undefined,
@@ -513,7 +523,7 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Admin Manual Override of Lunch
+  // Admin Manual Override of Lunch via Server Action
   const adminOverrideStudentLunch = async (studentId: string, day: DayKey) => {
     const student = students.find((s) => s.id === studentId);
     if (!student) return;
@@ -540,7 +550,7 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
     );
 
     try {
-      await api.overrideStudentMeal({
+      await adminOverrideLunchAction({
         studentId,
         day,
         selected: newVal,
@@ -664,7 +674,7 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Chef Attendance Actions
+  // Chef Attendance Actions directly via Server Action
   const markChefBreakfast = async (studentId: string) => {
     setStudents((prev) =>
       prev.map((s) => {
@@ -680,7 +690,7 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
     );
 
     try {
-      await api.checkInStudent({
+      await checkInStudentAction({
         studentId,
         mealType: "breakfast",
         status: "present",
@@ -705,7 +715,7 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
     );
 
     try {
-      await api.checkInStudent({
+      await checkInStudentAction({
         studentId,
         mealType: "dinner",
         status: "present",
@@ -749,7 +759,7 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
     );
 
     try {
-      await api.checkInStudent({
+      await checkInStudentAction({
         studentId,
         mealType: "lunch",
         status,
@@ -775,6 +785,7 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
         loginWithCredentials,
         changePassword,
         logout,
+        isHydrated,
         backendOnline,
         systemDay,
         setSystemDay,

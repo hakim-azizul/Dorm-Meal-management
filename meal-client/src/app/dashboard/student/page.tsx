@@ -33,7 +33,7 @@ export default function StudentDashboard() {
     systemDay,
     toggleFridaySimulation,
     todayDateFormatted,
-    backendOnline,
+    isHydrated,
   } = useMealApp();
 
   const [notification, setNotification] = useState<{
@@ -62,6 +62,17 @@ export default function StudentDashboard() {
   const selectedLunchesCount = studentSchedule.filter((d) => d.lunch.selected).length;
   const isStudentBlocked = currentUser?.isBlocked;
   const isCanModifyLunch = isFriday && !isGlobalLocked && !isStudentBlocked;
+
+  if (!isHydrated) {
+    return (
+      <div className="container mx-auto px-4 py-12 max-w-7xl flex items-center justify-center min-h-[50vh]">
+        <div className="flex flex-col items-center gap-3">
+          <span className="loading loading-spinner loading-lg text-primary" />
+          <span className="text-xs font-semibold text-base-content/60">Loading resident session...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 max-w-7xl">
@@ -93,17 +104,13 @@ export default function StudentDashboard() {
                 </span>
               )}
 
-              {/* API Connection Indicator */}
+              {/* Database Connection Indicator */}
               <span
-                className={`badge badge-xs font-bold gap-1 py-2 px-2.5 ${
-                  backendOnline
-                    ? "badge-success badge-outline text-emerald-600"
-                    : "badge-ghost opacity-60"
-                }`}
-                title={backendOnline ? "Connected to Express Backend (Port 5000)" : "Running in Local Simulation Mode"}
+                className="badge badge-xs font-bold gap-1 py-2 px-2.5 badge-success badge-outline text-emerald-600"
+                title="Connected to MongoDB Atlas Database"
               >
-                {backendOnline ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
-                <span>{backendOnline ? "API Online" : "Local Mode"}</span>
+                <Wifi className="w-3 h-3" />
+                <span>Database Online</span>
               </span>
             </div>
             <p className="text-xs sm:text-sm text-base-content/70 mt-1">
