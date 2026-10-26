@@ -4,6 +4,7 @@ import "dotenv/config";
 import { connectDB } from "./config/db.js";
 
 // Routes
+import authRoutes from "./routes/authRoutes.js";
 import mealRoutes from "./routes/mealRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import chefRoutes from "./routes/chefRoutes.js";
@@ -19,6 +20,7 @@ app.use(express.json());
 connectDB();
 
 // API Routes
+app.use("/api/auth", authRoutes);
 app.use("/api/meals", mealRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/chef", chefRoutes);
@@ -30,6 +32,7 @@ app.get("/", (req, res) => {
     service: "Weekly Meal Management API",
     version: "1.0.0",
     endpoints: {
+      auth: "/api/auth",
       student: "/api/meals",
       admin: "/api/admin",
       chef: "/api/chef",

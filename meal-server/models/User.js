@@ -14,6 +14,10 @@ const userSchema = new mongoose.Schema(
       trim: true,
       lowercase: true,
     },
+    password: {
+      type: String,
+      required: true,
+    },
     role: {
       type: String,
       enum: ["student", "admin", "chef"],
@@ -21,6 +25,10 @@ const userSchema = new mongoose.Schema(
       required: true,
     },
     room: {
+      type: String,
+      trim: true,
+    },
+    shift: {
       type: String,
       trim: true,
     },
@@ -35,6 +43,10 @@ const userSchema = new mongoose.Schema(
     penaltyReason: {
       type: String,
       trim: true,
+    },
+    isPasswordReset: {
+      type: Boolean,
+      default: true,
     },
   },
   { timestamps: true }

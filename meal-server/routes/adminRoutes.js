@@ -5,6 +5,8 @@ import {
   overrideStudentMeal,
   getAllUsers,
   createUser,
+  resetUserPassword,
+  deleteUser,
 } from "../controllers/adminController.js";
 
 const router = express.Router();
@@ -18,8 +20,10 @@ router.post("/toggle-block", toggleBlockStudent);
 // POST /api/admin/override-meal
 router.post("/override-meal", overrideStudentMeal);
 
-// User management helpers
+// User management
 router.get("/users", getAllUsers);
 router.post("/users", createUser);
+router.post("/reset-password", resetUserPassword);
+router.delete("/users/:id", deleteUser);
 
 export default router;

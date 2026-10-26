@@ -20,6 +20,7 @@ export interface StudentSelectionData {
   isBlocked: boolean;
   isRedFlagged: boolean;
   penaltyReason?: string;
+  isPasswordReset?: boolean;
   isGlobalLocked: boolean;
   isFriday: boolean;
   selection: {
@@ -37,13 +38,16 @@ export interface StudentSelectionData {
 
 export interface UserItem {
   _id: string;
+  id?: string;
   name: string;
   email: string;
   role: "student" | "admin" | "chef";
   room?: string;
+  shift?: string;
   isBlocked: boolean;
   isRedFlagged: boolean;
   penaltyReason?: string;
+  isPasswordReset?: boolean;
   createdAt?: string;
 }
 
@@ -91,18 +95,40 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 
     return data as T;
   } catch (error: any) {
-    // Re-throw with descriptive error for caller
-    throw new Error(error.message || "Network request failed. Is the backend server running?");
+    throw new Error(error.message || "Failed to communicate with backend server.");
   }
 }
 
 /* ==========================================================================
-   1. STUDENT API CALLS
+   1. AUTHENTICATION & PASSWORD MANAGEMENT API CALLS
    ========================================================================== */
 
-/**
- * Fetch a student's weekly meal plan, Friday status, and admin global lock
- */
+export async function loginUser(payload: { email: string; password: string }): Promise<ApiResponse<{ user: UserItem }>> {
+  return request<ApiResponse<{ user: UserItem }>>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function changeUserPassword(payload: {
+  userId: string;
+  currentPassword?: string;
+  newPassword: string;
+}): Promise<ApiResponse<{ user: UserItem }>> {
+  return request<ApiResponse<{ user: UserItem }>>("/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getUserProfile(userId: string): Promise<ApiResponse<{ user: UserItem }>> {
+  return request<ApiResponse<{ user: UserItem }>>(`/auth/me/${userId}`);
+}
+
+/* ==========================================================================
+   2. STUDENT API CALLS
+   ========================================================================== */
+
 export async function getMySelection(
   studentId: string,
   weekStartDate?: string
@@ -112,9 +138,6 @@ export async function getMySelection(
   return request<ApiResponse & StudentSelectionData>(`/meals/my-selection?${query.toString()}`);
 }
 
-/**
- * Submit or modify lunch choices (Allowed on Fridays only unless simulated)
- */
 export async function selectLunch(payload: {
   studentId: string;
   weekStartDate: string;
@@ -128,12 +151,9 @@ export async function selectLunch(payload: {
 }
 
 /* ==========================================================================
-   2. ADMIN API CALLS
+   3. ADMIN API CALLS
    ========================================================================== */
 
-/**
- * Toggle or set the Global Meal Selection Lock
- */
 export async function toggleGlobalLock(isLocked?: boolean): Promise<{ success: boolean; isGlobalLocked: boolean; message: string }> {
   return request("/admin/toggle-global-lock", {
     method: "POST",
@@ -141,9 +161,6 @@ export async function toggleGlobalLock(isLocked?: boolean): Promise<{ success: b
   });
 }
 
-/**
- * Block or unblock an individual student from modifying meals
- */
 export async function toggleBlockStudent(payload: {
   studentId: string;
   isBlocked: boolean;
@@ -155,9 +172,6 @@ export async function toggleBlockStudent(payload: {
   });
 }
 
-/**
- * Manually update a student's lunch status for any day
- */
 export async function overrideStudentMeal(payload: {
   studentId: string;
   weekStartDate?: string;
@@ -171,22 +185,17 @@ export async function overrideStudentMeal(payload: {
   });
 }
 
-/**
- * Fetch all registered users (optionally filtered by role)
- */
 export async function getUsers(role?: string): Promise<{ success: boolean; count: number; users: UserItem[] }> {
   const query = role ? `?role=${role}` : "";
   return request(`/admin/users${query}`);
 }
 
-/**
- * Create a new student or chef account
- */
 export async function createUser(payload: {
   name: string;
   email: string;
   role: string;
   room?: string;
+  shift?: string;
 }): Promise<ApiResponse<{ user: UserItem }>> {
   return request<ApiResponse<{ user: UserItem }>>("/admin/users", {
     method: "POST",
@@ -194,14 +203,23 @@ export async function createUser(payload: {
   });
 }
 
+export async function resetPasswordByAdmin(userId: string): Promise<ApiResponse> {
+  return request<ApiResponse>("/admin/reset-password", {
+    method: "POST",
+    body: JSON.stringify({ userId }),
+  });
+}
+
+export async function deleteUser(userId: string): Promise<ApiResponse> {
+  return request<ApiResponse>(`/admin/users/${userId}`, {
+    method: "DELETE",
+  });
+}
+
 /* ==========================================================================
-   3. CHEF / ATTENDANCE API CALLS
+   4. CHEF / ATTENDANCE API CALLS
    ========================================================================== */
 
-/**
- * Get daily attendance roster.
- * Breakfast & Dinner return all students; Lunch strictly returns only pre-selected students.
- */
 export async function getTodayList(
   mealType: string,
   date?: string,
@@ -213,10 +231,6 @@ export async function getTodayList(
   return request<ChefTodayListResponse>(`/chef/today-list?${query.toString()}`);
 }
 
-/**
- * Mark student attendance (present or absent).
- * If lunch & absent -> sets isRedFlagged = true. If present -> clears isRedFlagged.
- */
 export async function checkInStudent(payload: {
   studentId: string;
   date?: string;

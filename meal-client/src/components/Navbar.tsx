@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState } from "react";
 import Link from "next/link";
@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useLanguage } from "@/context/LanguageContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useMealApp } from "@/context/MealAppContext";
+import { PasswordChangeModal } from "@/components/PasswordChangeModal";
 import {
   UtensilsCrossed,
   Sun,
@@ -18,6 +19,7 @@ import {
   Menu,
   X,
   User,
+  KeyRound,
 } from "lucide-react";
 
 export function Navbar() {
@@ -28,6 +30,7 @@ export function Navbar() {
   const router = useRouter();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
 
   const handleSignOut = () => {
     logout();
@@ -49,31 +52,31 @@ export function Navbar() {
                 ? "/dashboard/chef"
                 : "/"
             }
-            className="flex items-center gap-2.5 group"
+            className="flex items-center gap-2.5 transition-transform hover:scale-[1.02]"
           >
-            <div className="w-10 h-10 rounded-xl bg-primary text-primary-content flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
-              <UtensilsCrossed className="w-5 h-5" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-content shadow-xs">
+              <UtensilsCrossed className="h-5 w-5" />
             </div>
             <div className="flex flex-col">
-              <span className="font-extrabold text-base sm:text-lg leading-tight tracking-tight text-base-content">
-                {t("appName")}
+              <span className="font-extrabold text-base sm:text-lg tracking-tight text-base-content leading-none">
+                {t("appTitle")}
               </span>
-              <span className="text-[10px] font-semibold text-primary uppercase tracking-wider">
-                {currentRole ? `${currentRole.toUpperCase()} PORTAL` : "Hostel Dining"}
+              <span className="text-[10px] sm:text-xs font-semibold text-primary tracking-wider uppercase">
+                {t("appSubtitle")}
               </span>
             </div>
           </Link>
         </div>
 
-        {/* Role-Based Dynamic Navigation (Strictly Isolated) */}
-        <nav className="hidden md:flex items-center gap-2">
+        {/* Desktop Navigation Links */}
+        <nav className="hidden md:flex items-center gap-1.5">
           {currentRole === "student" && (
             <Link
               href="/dashboard/student"
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
                 pathname === "/dashboard/student"
                   ? "bg-primary text-primary-content shadow-xs"
-                  : "text-base-content/80 hover:bg-base-200 hover:text-base-content"
+                  : "text-base-content/70 hover:text-base-content hover:bg-base-200"
               }`}
             >
               <GraduationCap className="w-4 h-4" />
@@ -84,10 +87,10 @@ export function Navbar() {
           {currentRole === "admin" && (
             <Link
               href="/dashboard/admin"
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
                 pathname === "/dashboard/admin"
-                  ? "bg-secondary text-secondary-content shadow-xs"
-                  : "text-base-content/80 hover:bg-base-200 hover:text-base-content"
+                  ? "bg-primary text-primary-content shadow-xs"
+                  : "text-base-content/70 hover:text-base-content hover:bg-base-200"
               }`}
             >
               <ShieldCheck className="w-4 h-4" />
@@ -98,65 +101,71 @@ export function Navbar() {
           {currentRole === "chef" && (
             <Link
               href="/dashboard/chef"
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
                 pathname === "/dashboard/chef"
-                  ? "bg-accent text-accent-content shadow-xs"
-                  : "text-base-content/80 hover:bg-base-200 hover:text-base-content"
+                  ? "bg-primary text-primary-content shadow-xs"
+                  : "text-base-content/70 hover:text-base-content hover:bg-base-200"
               }`}
             >
               <ChefHat className="w-4 h-4" />
               <span>{t("chefPortal")}</span>
             </Link>
           )}
-
-          {!currentRole && (
-            <Link
-              href="/login"
-              className="btn btn-primary btn-sm rounded-xl font-bold gap-2"
-            >
-              <User className="w-4 h-4" />
-              <span>{t("login")}</span>
-            </Link>
-          )}
         </nav>
 
-        {/* Right Controls: Language, Theme & User Profile */}
+        {/* Right Actions: Theme, Lang, User */}
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* Language Toggle (English & Arabic with dynamic RTL) */}
+          {/* Language Toggle */}
           <button
             onClick={() => setLanguage(language === "en" ? "ar" : "en")}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-base-300 hover:bg-base-200 text-xs font-bold transition-colors"
-            title="Toggle English / Arabic (RTL)"
+            className="btn btn-sm btn-ghost btn-circle"
+            title={language === "en" ? "التحويل إلى العربية" : "Switch to English"}
+            aria-label="Toggle language"
           >
-            <Globe className="w-3.5 h-3.5 text-primary" />
-            <span>{language === "en" ? "العربية" : "English"}</span>
+            <Globe className="w-4 h-4 text-base-content" />
           </button>
 
-          {/* Theme Toggle (Light / Dark) */}
+          {/* Theme Toggle */}
           <button
             onClick={toggleTheme}
-            className="p-2 rounded-xl border border-base-300 hover:bg-base-200 text-base-content transition-colors"
-            title={theme === "light" ? t("darkMode") : t("lightMode")}
-            aria-label="Toggle Theme"
+            className="btn btn-sm btn-ghost btn-circle"
+            title={theme === "light" ? "Dark mode" : "Light mode"}
+            aria-label="Toggle theme"
           >
             {theme === "light" ? (
-              <Moon className="w-4 h-4 text-slate-700" />
+              <Moon className="w-4 h-4 text-base-content" />
             ) : (
-              <Sun className="w-4 h-4 text-amber-400" />
+              <Sun className="w-4 h-4 text-warning" />
             )}
           </button>
 
-          {/* Current User Pill & Sign Out */}
+          {/* User Profile / Password / Logout */}
           {currentUser ? (
             <div className="flex items-center gap-2">
               <div className="hidden sm:flex flex-col text-right">
                 <span className="text-xs font-bold text-base-content truncate max-w-32.5">
                   {currentUser.name}
                 </span>
-                <span className="text-[10px] text-base-content/60 capitalize">
-                  {currentUser.role}
-                </span>
+                <div className="flex items-center gap-1 justify-end">
+                  <span className="text-[10px] text-base-content/60 capitalize">
+                    {currentUser.role}
+                  </span>
+                  {currentUser.isPasswordReset && (
+                    <span className="badge badge-warning badge-xs text-[9px] font-bold">
+                      Default Pass
+                    </span>
+                  )}
+                </div>
               </div>
+
+              {/* Change Password Button */}
+              <button
+                onClick={() => setPasswordModalOpen(true)}
+                className="btn btn-sm btn-ghost btn-circle text-primary hover:bg-primary/10"
+                title="Change Password"
+              >
+                <KeyRound className="w-4 h-4" />
+              </button>
 
               <button
                 onClick={handleSignOut}
@@ -223,16 +232,29 @@ export function Navbar() {
           )}
 
           {currentUser ? (
-            <button
-              onClick={() => {
-                setMobileMenuOpen(false);
-                handleSignOut();
-              }}
-              className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl bg-error/10 text-error font-bold text-sm"
-            >
-              <LogOut className="w-4 h-4" />
-              <span>{t("logout")}</span>
-            </button>
+            <div className="space-y-2 pt-2 border-t border-base-200">
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  setPasswordModalOpen(true);
+                }}
+                className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl bg-primary/10 text-primary font-bold text-sm"
+              >
+                <KeyRound className="w-4 h-4" />
+                <span>Change Password</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  handleSignOut();
+                }}
+                className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl bg-error/10 text-error font-bold text-sm"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>{t("logout")}</span>
+              </button>
+            </div>
           ) : (
             <Link
               href="/login"
@@ -244,7 +266,12 @@ export function Navbar() {
           )}
         </div>
       )}
+
+      {/* Password Change Modal */}
+      <PasswordChangeModal
+        isOpen={passwordModalOpen}
+        onClose={() => setPasswordModalOpen(false)}
+      />
     </header>
   );
 }
-

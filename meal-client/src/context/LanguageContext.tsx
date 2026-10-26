@@ -14,6 +14,8 @@ export interface Translations {
 export const translations = {
   // Global & Navigation
   appName: { en: "Hostel Dining System", ar: "نظام وجبات السكن" },
+  appTitle: { en: "Hostel Dining System", ar: "نظام وجبات السكن" },
+  appSubtitle: { en: "Meal Management", ar: "إدارة الوجبات" },
   home: { en: "Home", ar: "الرئيسية" },
   studentPortal: { en: "Student Dashboard", ar: "لوحة الطالب" },
   adminPortal: { en: "Admin Dashboard", ar: "لوحة المشرف" },
@@ -60,43 +62,49 @@ export const translations = {
   breakfast: { en: "Breakfast", ar: "الإفطار" },
   lunch: { en: "Lunch", ar: "الغداء" },
   dinner: { en: "Dinner", ar: "العشاء" },
-  fixedBadge: { en: "Auto-Selected (Fixed)", ar: "محدد تلقائياً (ثابت)" },
-  preSelected: { en: "Pre-Selected", ar: "محجوز مسبقاً" },
-  optedOut: { en: "Opted Out", ar: "غير محجوز" },
 
   // Student Dashboard
-  studentHeading: { en: "Weekly Meal Selection Grid", ar: "جدول اختيار الوجبات الأسبوعي" },
-  welcomeBack: { en: "Welcome back", ar: "مرحباً بعودتك" },
-  room: { en: "Room", ar: "الغرفة" },
-  fridayPolicyNote: { 
-    en: "POLICY: Lunch selection can ONLY be modified on Fridays. On all other days, choices are locked for inventory.", 
-    ar: "السياسة: تعديل وجبة الغداء متاح فقط أيام الجمعة. في باقي الأيام يكون الاختيار مقفلاً لضبط التموين." 
+  studentHeading: { en: "Weekly Meal Selection", ar: "جدول تحديد الوجبات الأسبوعي" },
+  studentSubheading: { 
+    en: "Choose your lunch preferences for the upcoming week. Breakfast & Dinner are automatically included every day.", 
+    ar: "حدد خيارات الغداء للأسبوع القادم. الفطور والعشاء محجوزان ومتاحان تلقائياً كل يوم." 
   },
-  fridayOpenBadge: { en: "Friday Window OPEN", ar: "نافذة الجمعة مفتوحة" },
-  fridayLockedBadge: { en: "Window LOCKED (Sat-Thu)", ar: "النافذة مغلقة (السبت-الخميس)" },
-  simulateFriday: { en: "Simulate Today is Friday", ar: "محاكاة: اليوم هو الجمعة" },
-  simulateOtherDay: { en: "Simulate Today is Monday", ar: "محاكاة: اليوم هو الإثنين" },
-  punishmentAlertTitle: { en: "Account Suspended by Administration", ar: "الحساب موقوف من قبل الإدارة" },
-  punishmentAlertMsg: { 
-    en: "Your meal selection privileges are currently blocked due to a disciplinary notice. Contact the warden.", 
-    ar: "تم تعليق صلاحيات اختيار الوجبات الخاصة بك بسبب عقوبة إدارية. يرجى مراجعة إدارة السكن." 
+  selectionLockedNotice: { 
+    en: "Meal choices can only be submitted or modified on FRIDAYS. On all other days, choices are frozen.", 
+    ar: "تحديد الوجبات وتعديلها متاح أيام الجمعة فقط. في بقية الأيام يكون الجدول مقفلاً." 
   },
-  redFlagAlertTitle: { en: "Attendance Red-Flag Active!", ar: "تنبيه غياب باللون الأحمر!" },
-  redFlagAlertMsg: { 
-    en: "You were marked ABSENT for a pre-selected lunch. Your upcoming meals are tagged in RED. You must check in with the chef to clear this flag.", 
-    ar: "تم تسجيل غيابك عن وجبة غداء محجوزة مسبقاً. وجباتك القادمة موسومة بالأحمر. يجب مراجعة الطاهي لتسجيل الحضور وإلغاء التنبيه." 
+  fridayOpenBadge: { en: "SELECTION OPEN TODAY (FRIDAY)", ar: "نافذة الاختيار مفتوحة اليوم (الجمعة)" },
+  fridayClosedBadge: { en: "Selection Locked (Opens Next Friday)", ar: "الاختيار مغلق (يفتح الجمعة القادمة)" },
+  simulateFridayToggle: { en: "Simulate Friday Selection Window", ar: "محاكاة فتح الاختيار (ليوم الجمعة)" },
+  fixedNotice: { en: "Fixed & Included Daily", ar: "ثابت ومضمن يومياً" },
+  selectLunchLabel: { en: "Opt-in for Lunch Meal", ar: "حجز وجبة الغداء لهذا اليوم" },
+  unselectLunchLabel: { en: "Opted-out (No Lunch Meal)", ar: "غير محجوز (بدون غداء)" },
+  blockedStudentWarning: { 
+    en: "ACCESS RESTRICTED: Your meal selection privileges have been temporarily suspended by the warden.", 
+    ar: "تم تقييد الصلاحيات: تم تعليق صلاحية تعديل وجباتك مؤقتاً بقرار من إدارة السكن." 
   },
-  globalLockAlertTitle: { en: "Global Selection Lock Activated", ar: "القفل العام لاختيار الوجبات مفعّل" },
-  globalLockAlertMsg: { 
-    en: "The admin has locked all weekly choices after Friday. Changes are currently disabled.", 
-    ar: "قام المشرف بإقفال جميع الخيارات الأسبوعية بعد انتهاء يوم الجمعة. التعديل غير متاح حالياً." 
+  redFlagBanner: { 
+    en: "ABSENCE WARNING: You missed a previously pre-selected lunch. Please check in with the kitchen chef on your next meal to clear your red flag.", 
+    ar: "تنبيه غياب: لقد تغيبت عن وجبة غداء محجوزة مسبقاً. يرجى تأكيد حضورك لدى الطاهي في الوجبة القادمة لإلغاء التنبيه." 
+  },
+  globalLockBanner: { 
+    en: "GLOBAL ADMIN LOCK: All meal selections are currently frozen by hostel administration.", 
+    ar: "إغلاق عام من الإدارة: تم تجميد جميع خيارات الوجبات مؤقتاً بقرار إداري عام." 
   },
 
   // Admin Dashboard
+  adminDashboardTitle: { en: "Hostel Meal Administration", ar: "إدارة وجبات السكن الجامعي" },
   adminHeading: { en: "Hostel Meal Administration", ar: "إدارة وجبات السكن الجامعي" },
-  globalLockSwitch: { en: "Global Lunch Selection Lock", ar: "القفل العام لاختيار الغداء" },
-  globalLockSub: { 
-    en: "Lock weekly selections for all students once Friday closes", 
+  globalLockLabel: { en: "Global Meal Selection Lock", ar: "القفل العام لاختيارات الوجبات" },
+  globalLockStatus: { en: "Global Lock Status", ar: "حالة القفل العام" },
+  locked: { en: "Locked", ar: "مقفل" },
+  unlocked: { en: "Unlocked", ar: "مفتوح" },
+  lockGlobalBtn: { en: "Activate Global Lock", ar: "تفعيل القفل العام" },
+  unlockGlobalBtn: { en: "Deactivate Global Lock", ar: "تعطيل القفل العام" },
+  createStudentBtn: { en: "Add Student", ar: "إضافة طالب" },
+  createChefBtn: { en: "Add Chef", ar: "إضافة طاهٍ" },
+  globalLockHelp: { 
+    en: "Freezes all student meal selection capabilities immediately after Friday window closes", 
     ar: "إقفال خيارات جميع الطلاب فور انتهاء يوم الجمعة" 
   },
   lockActive: { en: "LOCKED (All Students Blocked)", ar: "مُقفل (ممنوع التعديل للجميع)" },
@@ -142,13 +150,21 @@ export const translations = {
   absentCount: { en: "Marked Absent", ar: "المسجلون غياب" },
 
   // Login Page
+  loginTitle: { en: "Access Meal Management Portal", ar: "الدخول إلى بوابة إدارة الوجبات" },
+  loginSubtitle: { en: "Select a user role to enter their isolated dashboard", ar: "اختر دور المستخدم للدخول إلى لوحته المخصصة" },
   signInTitle: { en: "Access Meal Management Portal", ar: "الدخول إلى بوابة إدارة الوجبات" },
   signInSubtitle: { en: "Select a user role to enter their isolated dashboard", ar: "اختر دور المستخدم للدخول إلى لوحته المخصصة" },
+  studentRole: { en: "Student", ar: "طالب" },
+  adminRole: { en: "Admin (Warden)", ar: "مشرف السكن" },
+  chefRole: { en: "Chef (Kitchen)", ar: "طاهي الصالة" },
+  emailLabel: { en: "Email Address", ar: "البريد الإلكتروني" },
+  passwordLabel: { en: "Account Password", ar: "كلمة المرور" },
   quickAccess: { en: "Role-Based Quick Access", ar: "دخول سريع حسب الدور" },
   loginAsStudent: { en: "Login as Student (Ahmed Al-Mansoor)", ar: "دخول كطالب (أحمد المنصور)" },
   loginAsAdmin: { en: "Login as Admin (Hostel Warden)", ar: "دخول كمشرف (مشرف السكن)" },
   loginAsChef: { en: "Login as Chef (Mess Supervisor)", ar: "دخول كطاهٍ (مسؤول الصالة)" },
   email: { en: "Email", ar: "البريد الإلكتروني" },
+  room: { en: "Room", ar: "الغرفة" },
   password: { en: "Password", ar: "كلمة المرور" },
   submitLogin: { en: "Sign In to Dashboard", ar: "تسجيل الدخول إلى اللوحة" },
 };
@@ -157,7 +173,7 @@ interface LanguageContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
   dir: "ltr" | "rtl";
-  t: (key: keyof typeof translations) => string;
+  t: (key: string) => string;
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
@@ -186,8 +202,8 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 
   const dir = language === "ar" ? "rtl" : "ltr";
 
-  const t = (key: keyof typeof translations): string => {
-    const item = translations[key];
+  const t = (key: string): string => {
+    const item = (translations as Record<string, { en: string; ar: string }>)[key];
     if (!item) return String(key);
     return item[language] || item.en || String(key);
   };

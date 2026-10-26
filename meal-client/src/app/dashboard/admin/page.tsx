@@ -17,6 +17,8 @@ import {
   X,
   ShieldAlert,
   Trash2,
+  KeyRound,
+  RotateCcw,
   Wifi,
   WifiOff,
 } from "lucide-react";
@@ -36,6 +38,7 @@ export default function AdminDashboard() {
     deleteStudent,
     addNewChef,
     deleteChef,
+    adminResetPassword,
     backendOnline,
   } = useMealApp();
 
@@ -59,6 +62,9 @@ export default function AdminDashboard() {
   const [newChefName, setNewChefName] = useState("");
   const [newChefEmail, setNewChefEmail] = useState("");
   const [newChefShift, setNewChefShift] = useState("Morning & Lunch Session");
+
+  // Reset Password Confirmation Modal
+  const [userToReset, setUserToReset] = useState<{ id: string; name: string; role: string } | null>(null);
 
   // Filtering
   const filteredStudents = students.filter((s) => {
@@ -104,145 +110,160 @@ export default function AdminDashboard() {
     await toggleStudentPenalty(student.id);
     setNotification({
       type: "success",
-      text: `Meal privileges restored for ${student.name}.`,
-    });
-    setTimeout(() => setNotification(null), 4000);
-  };
-
-  const handleToggleLock = async () => {
-    await toggleGlobalLock();
-    setNotification({
-      type: "success",
-      text: `Global Selection Lock is now ${!isGlobalLocked ? "ACTIVATED (Locked)" : "UNLOCKED"}.`,
+      text: `Meal restriction lifted for ${student.name}.`,
     });
     setTimeout(() => setNotification(null), 4000);
   };
 
   const handleOverrideLunch = async (studentId: string, day: DayKey) => {
     await adminOverrideStudentLunch(studentId, day);
-    const stu = students.find((s) => s.id === studentId);
     setNotification({
       type: "success",
-      text: `Updated ${day.toUpperCase()} lunch choice for ${stu?.name || "student"}.`,
+      text: `Manual lunch override saved for ${day.toUpperCase()}.`,
     });
     setTimeout(() => setNotification(null), 3000);
   };
 
   const handleCreateStudent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newStudentName && newStudentRoom && newStudentEmail) {
-      await addNewStudent({
-        name: newStudentName,
-        room: newStudentRoom,
-        email: newStudentEmail,
-      });
-      setNotification({
-        type: "success",
-        text: `Student ${newStudentName} created and enrolled.`,
-      });
-      setNewStudentName("");
-      setNewStudentRoom("");
-      setNewStudentEmail("");
-      setShowAddStudentModal(false);
-      setTimeout(() => setNotification(null), 4000);
-    }
+    if (!newStudentName || !newStudentEmail || !newStudentRoom) return;
+
+    await addNewStudent({
+      name: newStudentName,
+      room: newStudentRoom,
+      email: newStudentEmail,
+    });
+
+    setNotification({
+      type: "success",
+      text: `Student ${newStudentName} registered with default password "Dorm@1234".`,
+    });
+
+    setShowAddStudentModal(false);
+    setNewStudentName("");
+    setNewStudentRoom("");
+    setNewStudentEmail("");
+    setTimeout(() => setNotification(null), 5000);
   };
 
   const handleCreateChef = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newChefName && newChefEmail) {
-      await addNewChef({
-        name: newChefName,
-        email: newChefEmail,
-        shift: newChefShift,
-      });
+    if (!newChefName || !newChefEmail) return;
+
+    await addNewChef({
+      name: newChefName,
+      email: newChefEmail,
+      shift: newChefShift,
+    });
+
+    setNotification({
+      type: "success",
+      text: `Kitchen Chef ${newChefName} added with default password "Dorm@1234".`,
+    });
+
+    setShowAddChefModal(false);
+    setNewChefName("");
+    setNewChefEmail("");
+    setTimeout(() => setNotification(null), 5000);
+  };
+
+  const handleConfirmResetPassword = async () => {
+    if (!userToReset) return;
+    const res = await adminResetPassword(userToReset.id);
+    if (res.success) {
       setNotification({
         type: "success",
-        text: `Chef ${newChefName} registered successfully.`,
+        text: `Password for ${userToReset.name} reset to "Dorm@1234".`,
       });
-      setNewChefName("");
-      setNewChefEmail("");
-      setShowAddChefModal(false);
-      setTimeout(() => setNotification(null), 4000);
+    } else {
+      setNotification({
+        type: "error",
+        text: res.message,
+      });
     }
+    setUserToReset(null);
+    setTimeout(() => setNotification(null), 5000);
   };
 
   return (
     <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 max-w-7xl">
-      {/* Header & Global Lock Control Switch */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 p-6 rounded-3xl bg-base-200/60 border border-base-300 mb-8 shadow-xs">
-        <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-secondary/15 text-secondary flex items-center justify-center font-bold text-2xl shadow-xs shrink-0">
-            <ShieldCheck className="w-9 h-9" />
+      {/* Top Banner / Global Lock Controller */}
+      <div className="card bg-base-100 border border-base-300 shadow-sm p-6 mb-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-bold text-2xl shadow-xs shrink-0">
+              <ShieldCheck className="w-8 h-8" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-2xl sm:text-3xl font-black text-base-content">
+                  {t("adminDashboardTitle")}
+                </h1>
+                <span className="badge badge-primary badge-sm font-bold uppercase tracking-wider">
+                  Hostel Administration
+                </span>
+                <span
+                  className={`badge badge-xs font-bold gap-1 py-2 px-2.5 ${
+                    backendOnline
+                      ? "badge-success badge-outline text-emerald-600"
+                      : "badge-warning badge-outline text-amber-600"
+                  }`}
+                >
+                  {backendOnline ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+                  {backendOnline ? "Atlas Connected" : "Local Database"}
+                </span>
+              </div>
+              <p className="text-xs sm:text-sm text-base-content/60 mt-1">
+                Manage student lunch privileges, user credentials, and global system freeze.
+              </p>
+            </div>
           </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-2xl sm:text-3xl font-black text-base-content">
-                {t("adminHeading")}
-              </h1>
+
+          {/* Master Global Lock Toggle */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 bg-base-200/50 p-4 rounded-2xl border border-base-300">
+            <div className="text-left sm:text-right">
+              <span className="block text-xs font-extrabold text-base-content uppercase tracking-wider">
+                {t("globalLockStatus")}
+              </span>
               <span
-                className={`badge badge-xs font-bold gap-1 py-2 px-2.5 ${
-                  backendOnline
-                    ? "badge-success badge-outline text-emerald-600"
-                    : "badge-ghost opacity-60"
+                className={`text-sm font-black flex items-center gap-1.5 ${
+                  isGlobalLocked ? "text-error" : "text-success"
                 }`}
-                title={backendOnline ? "Connected to Express Backend (Port 5000)" : "Running in Local Simulation Mode"}
               >
-                {backendOnline ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
-                <span>{backendOnline ? "API Online" : "Local Mode"}</span>
+                {isGlobalLocked ? (
+                  <>
+                    <Lock className="w-4 h-4" />
+                    <span>{t("locked")}</span>
+                  </>
+                ) : (
+                  <>
+                    <Unlock className="w-4 h-4" />
+                    <span>{t("unlocked")}</span>
+                  </>
+                )}
               </span>
             </div>
-            <p className="text-xs sm:text-sm text-base-content/70 mt-1">
-              Hostel Warden Master Controls • Disciplinary Enforcement & Account Management
-            </p>
-          </div>
-        </div>
 
-        {/* Global Lock Switch (Locks after Friday) */}
-        <div className="flex items-center justify-between sm:justify-start gap-4 p-4 rounded-2xl bg-base-100 border border-base-300 shadow-xs">
-          <div>
-            <div className="text-xs font-bold uppercase tracking-wider text-base-content/60">
-              {t("globalLockSwitch")}
-            </div>
-            <div
-              className={`text-xs font-black mt-0.5 ${
-                isGlobalLocked ? "text-error" : "text-success"
+            <button
+              onClick={toggleGlobalLock}
+              className={`btn btn-sm sm:btn-md font-bold gap-2 shadow-xs transition-all ${
+                isGlobalLocked
+                  ? "btn-success text-success-content"
+                  : "btn-error text-error-content"
               }`}
             >
-              {isGlobalLocked ? t("lockActive") : t("lockInactive")}
-            </div>
+              {isGlobalLocked ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+              <span>{isGlobalLocked ? t("unlockGlobalBtn") : t("lockGlobalBtn")}</span>
+            </button>
           </div>
-
-          <button
-            onClick={handleToggleLock}
-            className={`btn btn-sm gap-2 font-bold shadow-xs transition-all ${
-              isGlobalLocked
-                ? "btn-error text-white"
-                : "btn-outline btn-success"
-            }`}
-          >
-            {isGlobalLocked ? (
-              <>
-                <Unlock className="w-4 h-4" />
-                <span>Unlock For Friday</span>
-              </>
-            ) : (
-              <>
-                <Lock className="w-4 h-4" />
-                <span>Lock All Choices</span>
-              </>
-            )}
-          </button>
         </div>
       </div>
 
-      {/* Toast Notification */}
+      {/* Live System Notification */}
       {notification && (
         <div
-          className={`alert mb-6 shadow-md transition-all ${
-            notification.type === "success"
-              ? "alert-success text-success-content"
-              : "alert-error text-white"
+          className={`alert mb-6 shadow-sm rounded-2xl font-medium text-xs sm:text-sm ${
+            notification.type === "success" ? "alert-success text-white" : "alert-error text-white"
           }`}
         >
           {notification.type === "success" ? (
@@ -250,128 +271,149 @@ export default function AdminDashboard() {
           ) : (
             <AlertTriangle className="w-5 h-5 shrink-0" />
           )}
-          <span className="text-xs sm:text-sm font-bold">{notification.text}</span>
+          <span>{notification.text}</span>
         </div>
       )}
 
-      {/* Metrics Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="p-5 rounded-2xl bg-base-100 border border-base-300 shadow-xs">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-base-content/60 uppercase">
-              {t("totalStudents")}
-            </span>
+      {/* Metrics Row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="card bg-base-100 border border-base-300 p-4 rounded-2xl shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-base-content/60">Total Students</span>
             <Users className="w-4 h-4 text-primary" />
           </div>
-          <div className="text-3xl font-black text-base-content">{students.length}</div>
-          <span className="text-[11px] text-base-content/60">Registered Hostel Residents</span>
+          <div className="text-2xl font-black mt-2 text-base-content">{students.length}</div>
+          <span className="text-[11px] text-base-content/50 mt-1">Hostel Residents</span>
         </div>
 
-        <div className="p-5 rounded-2xl bg-base-100 border border-base-300 shadow-xs">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-base-content/60 uppercase">
-              {t("activePenalties")}
-            </span>
-            <ShieldAlert className="w-4 h-4 text-rose-500" />
+        <div className="card bg-base-100 border border-base-300 p-4 rounded-2xl shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-base-content/60">Lunches Booked</span>
+            <Calendar className="w-4 h-4 text-accent" />
           </div>
-          <div className="text-3xl font-black text-rose-600">{penalizedCount}</div>
-          <span className="text-[11px] text-rose-500/80 font-bold">Meal Choices Blocked</span>
+          <div className="text-2xl font-black mt-2 text-base-content">
+            {totalWeeklyLunchesBooked}
+          </div>
+          <span className="text-[11px] text-base-content/50 mt-1">Active Pre-selections</span>
         </div>
 
-        <div className="p-5 rounded-2xl bg-base-100 border border-base-300 shadow-xs">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-base-content/60 uppercase">
-              {t("redFlaggedStudents")}
-            </span>
-            <AlertTriangle className="w-4 h-4 text-amber-500" />
+        <div className="card bg-base-100 border border-base-300 p-4 rounded-2xl shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-base-content/60">Restricted Students</span>
+            <ShieldAlert className="w-4 h-4 text-error" />
           </div>
-          <div className="text-3xl font-black text-amber-600">{redFlagCount}</div>
-          <span className="text-[11px] text-amber-600/80 font-bold">Missed Meal Absentees</span>
+          <div className="text-2xl font-black mt-2 text-error">{penalizedCount}</div>
+          <span className="text-[11px] text-base-content/50 mt-1">Selection Blocked</span>
         </div>
 
-        <div className="p-5 rounded-2xl bg-base-100 border border-base-300 shadow-xs">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-base-content/60 uppercase">
-              {t("weeklyLunches")}
-            </span>
-            <Calendar className="w-4 h-4 text-emerald-500" />
+        <div className="card bg-base-100 border border-base-300 p-4 rounded-2xl shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-base-content/60">Red-Flagged Absences</span>
+            <AlertTriangle className="w-4 h-4 text-warning" />
           </div>
-          <div className="text-3xl font-black text-emerald-600">{totalWeeklyLunchesBooked}</div>
-          <span className="text-[11px] text-base-content/60">Total Student Meals Booked</span>
+          <div className="text-2xl font-black mt-2 text-warning">{redFlagCount}</div>
+          <span className="text-[11px] text-base-content/50 mt-1">Missed Reserved Lunch</span>
         </div>
       </div>
 
-      {/* Tabs & Controls Bar */}
+      {/* Main Tabs and Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div className="tabs tabs-boxed bg-base-200 p-1 rounded-2xl font-bold text-xs">
+        <div className="flex items-center gap-2 p-1.5 bg-base-200 rounded-2xl w-fit">
           <button
             onClick={() => setActiveTab("students")}
-            className={`tab tab-sm font-bold ${
-              activeTab === "students" ? "tab-active bg-secondary text-secondary-content" : ""
+            className={`btn btn-sm rounded-xl font-bold gap-2 transition-all ${
+              activeTab === "students" ? "btn-primary shadow-xs" : "btn-ghost text-base-content/70"
             }`}
           >
-            <Users className="w-4 h-4 mr-1.5" />
-            <span>{t("studentsTab")} ({students.length})</span>
+            <Users className="w-4 h-4" />
+            <span>Students Roster ({students.length})</span>
           </button>
+
           <button
             onClick={() => setActiveTab("chefs")}
-            className={`tab tab-sm font-bold ${
-              activeTab === "chefs" ? "tab-active bg-secondary text-secondary-content" : ""
+            className={`btn btn-sm rounded-xl font-bold gap-2 transition-all ${
+              activeTab === "chefs" ? "btn-primary shadow-xs" : "btn-ghost text-base-content/70"
             }`}
           >
-            <ChefHat className="w-4 h-4 mr-1.5" />
-            <span>{t("staffTab")} ({chefs.length})</span>
+            <ChefHat className="w-4 h-4" />
+            <span>Kitchen Chefs ({chefs.length})</span>
           </button>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2">
           {activeTab === "students" ? (
-            <>
-              {/* Search */}
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder={t("searchPlaceholder")}
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="input input-sm input-bordered w-full sm:w-64 pl-8 text-xs font-medium rounded-xl"
-                />
-                <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-base-content/50" />
-              </div>
-
-              {/* Status Filter */}
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as any)}
-                className="select select-sm select-bordered text-xs font-bold rounded-xl"
-              >
-                <option value="all">All Students</option>
-                <option value="penalized">Penalized / Blocked Only</option>
-                <option value="redflags">Red-Flagged Absentees Only</option>
-                <option value="active">Active & Normal Only</option>
-              </select>
-
-              <button
-                onClick={() => setShowAddStudentModal(true)}
-                className="btn btn-sm btn-secondary gap-1 font-bold rounded-xl shadow-xs"
-              >
-                <UserPlus className="w-3.5 h-3.5" />
-                <span>{t("addStudent")}</span>
-              </button>
-            </>
+            <button
+              onClick={() => setShowAddStudentModal(true)}
+              className="btn btn-sm btn-primary font-bold gap-1.5 shadow-xs"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>{t("createStudentBtn")}</span>
+            </button>
           ) : (
             <button
               onClick={() => setShowAddChefModal(true)}
-              className="btn btn-sm btn-secondary gap-1 font-bold rounded-xl shadow-xs"
+              className="btn btn-sm btn-primary font-bold gap-1.5 shadow-xs"
             >
-              <UserPlus className="w-3.5 h-3.5" />
-              <span>{t("addChef")}</span>
+              <ChefHat className="w-4 h-4" />
+              <span>{t("createChefBtn")}</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* Main Content Area */}
+      {/* Search and Filters */}
+      {activeTab === "students" && (
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+          <div className="relative w-full md:w-80">
+            <input
+              type="text"
+              placeholder="Search by name, room, or email..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="input input-sm input-bordered w-full pl-9 text-xs"
+            />
+            <Search className="w-4 h-4 text-base-content/40 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => setStatusFilter("all")}
+              className={`badge badge-sm font-bold cursor-pointer py-3 px-3 transition-all ${
+                statusFilter === "all" ? "badge-primary" : "badge-ghost opacity-60"
+              }`}
+            >
+              All Residents ({students.length})
+            </button>
+            <button
+              onClick={() => setStatusFilter("active")}
+              className={`badge badge-sm font-bold cursor-pointer py-3 px-3 transition-all ${
+                statusFilter === "active" ? "badge-success text-white" : "badge-ghost opacity-60"
+              }`}
+            >
+              Active ({students.filter((s) => !s.isBlocked && !s.isRedFlagged).length})
+            </button>
+            <button
+              onClick={() => setStatusFilter("penalized")}
+              className={`badge badge-sm font-bold cursor-pointer py-3 px-3 transition-all ${
+                statusFilter === "penalized" ? "badge-error text-white" : "badge-ghost opacity-60"
+              }`}
+            >
+              Blocked ({penalizedCount})
+            </button>
+            <button
+              onClick={() => setStatusFilter("redflags")}
+              className={`badge badge-sm font-bold cursor-pointer py-3 px-3 transition-all ${
+                statusFilter === "redflags" ? "badge-warning text-black" : "badge-ghost opacity-60"
+              }`}
+            >
+              Red-Flagged ({redFlagCount})
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Students Table */}
       {activeTab === "students" ? (
         <div className="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
@@ -380,23 +422,16 @@ export default function AdminDashboard() {
                 <tr>
                   <th>Student Info</th>
                   <th>Room</th>
-                  <th>
-                    <div className="flex items-center gap-1">
-                      <span>Weekly Lunch Selections</span>
-                      <span className="badge badge-xs badge-ghost text-[9px] font-normal">
-                        Click Day to Override
-                      </span>
-                    </div>
-                  </th>
-                  <th>Disciplinary & Red-Flag Status</th>
-                  <th>Actions & Punishment</th>
+                  <th>Weekly Lunch Selections (Click Day to Override)</th>
+                  <th>Account Status</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredStudents.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="text-center py-8 text-base-content/60">
-                      No matching student records found.
+                    <td colSpan={5} className="text-center py-8 text-base-content/50">
+                      No student records found.
                     </td>
                   </tr>
                 ) : (
@@ -448,7 +483,7 @@ export default function AdminDashboard() {
                           </div>
                         </td>
 
-                        {/* Status (Blocked / Red-Flagged / Active) */}
+                        {/* Status (Blocked / Red-Flagged / Active / Password Status) */}
                         <td>
                           <div className="flex flex-col gap-1">
                             {student.isBlocked && (
@@ -469,6 +504,12 @@ export default function AdminDashboard() {
                                 Normal & Permitted
                               </span>
                             )}
+                            {student.isPasswordReset && (
+                              <span className="badge badge-outline badge-info gap-1 text-[10px] font-bold py-1">
+                                <KeyRound className="w-3 h-3" />
+                                Default Pass Active
+                              </span>
+                            )}
                             {student.penaltyReason && (
                               <span className="text-[10px] text-rose-600 dark:text-rose-400 italic">
                                 {student.penaltyReason}
@@ -477,9 +518,9 @@ export default function AdminDashboard() {
                           </div>
                         </td>
 
-                        {/* Punishment Actions */}
+                        {/* Actions: Block / Reset Password / Delete */}
                         <td>
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             {student.isBlocked ? (
                               <button
                                 onClick={() => handleLiftPenalty(student)}
@@ -497,6 +538,16 @@ export default function AdminDashboard() {
                                 <span>{t("blockStudentBtn")}</span>
                               </button>
                             )}
+
+                            {/* Reset Password Button */}
+                            <button
+                              onClick={() => setUserToReset({ id: student.id, name: student.name, role: "Student" })}
+                              className="btn btn-xs btn-outline btn-warning font-bold gap-1"
+                              title="Reset Password back to default 'Dorm@1234'"
+                            >
+                              <RotateCcw className="w-3 h-3" />
+                              <span>Reset Pass</span>
+                            </button>
 
                             <button
                               onClick={() => deleteStudent(student.id)}
@@ -526,7 +577,7 @@ export default function AdminDashboard() {
                   <th>Email</th>
                   <th>Shift Assignment</th>
                   <th>Status</th>
-                  <th>Action</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -543,23 +594,93 @@ export default function AdminDashboard() {
                       </span>
                     </td>
                     <td>
-                      <span className="badge badge-success badge-xs font-bold text-success-content">
-                        Active Kitchen Staff
-                      </span>
+                      <div className="flex flex-col gap-1">
+                        <span className="badge badge-success badge-xs font-bold text-success-content">
+                          Active Kitchen Staff
+                        </span>
+                        {chef.isPasswordReset && (
+                          <span className="badge badge-outline badge-info badge-xs font-bold gap-1">
+                            <KeyRound className="w-2.5 h-2.5" />
+                            Default Pass Active
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td>
-                      <button
-                        onClick={() => deleteChef(chef.id)}
-                        className="btn btn-xs btn-ghost btn-circle text-error hover:bg-error/10"
-                        title="Remove Chef Account"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => setUserToReset({ id: chef.id, name: chef.name, role: "Chef" })}
+                          className="btn btn-xs btn-outline btn-warning font-bold gap-1"
+                          title="Reset Password back to default 'Dorm@1234'"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          <span>Reset Pass</span>
+                        </button>
+
+                        <button
+                          onClick={() => deleteChef(chef.id)}
+                          className="btn btn-xs btn-ghost btn-circle text-error hover:bg-error/10"
+                          title="Remove Chef Account"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Reset Password Confirmation */}
+      {userToReset && (
+        <div className="modal modal-open">
+          <div className="modal-box max-w-md bg-base-100 border border-base-300 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-base-200">
+              <h3 className="font-bold text-base text-amber-600 flex items-center gap-2">
+                <RotateCcw className="w-5 h-5" />
+                <span>Reset User Password</span>
+              </h3>
+              <button
+                onClick={() => setUserToReset(null)}
+                className="btn btn-sm btn-ghost btn-circle"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="py-4 space-y-3">
+              <p className="text-xs text-base-content/80 leading-relaxed">
+                Are you sure you want to reset the password for{" "}
+                <span className="font-bold text-base-content">{userToReset.name}</span> ({userToReset.role})?
+              </p>
+
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-200">
+                Password will be restored to: <strong className="font-mono text-primary font-black">Dorm@1234</strong>
+                <br />
+                User will be marked with <code className="font-bold">isPasswordReset: true</code> until they change it.
+              </div>
+            </div>
+
+            <div className="modal-action border-t border-base-200 pt-3">
+              <button
+                type="button"
+                onClick={() => setUserToReset(null)}
+                className="btn btn-sm btn-ghost"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmResetPassword}
+                className="btn btn-sm btn-warning font-bold gap-1.5"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>Confirm Reset</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -581,54 +702,57 @@ export default function AdminDashboard() {
               </button>
             </div>
 
-            <div className="py-4 space-y-3 text-xs">
-              <p className="text-base-content/80">
-                You are imposing a meal modification block on resident:
+            <div className="py-4 space-y-4">
+              <p className="text-xs text-base-content/80 leading-relaxed">
+                Blocking will immediately freeze lunch modification permissions for{" "}
+                <span className="font-bold text-base-content">{selectedStudentForBlock.name}</span>.
               </p>
-              <div className="p-3 rounded-2xl bg-base-200 font-bold text-sm text-base-content">
-                {selectedStudentForBlock.name} ({selectedStudentForBlock.room})
-              </div>
 
               <div className="form-control">
-                <label className="label text-xs font-bold">
-                  <span>Reason for Disciplinary Penalty</span>
+                <label className="label">
+                  <span className="label-text font-bold text-xs">
+                    Disciplinary Penalty / Reason
+                  </span>
                 </label>
                 <textarea
                   value={penaltyReasonText}
                   onChange={(e) => setPenaltyReasonText(e.target.value)}
-                  className="textarea textarea-bordered w-full text-xs font-medium"
+                  placeholder="e.g., Hostel noise complaint or unauthorized guest violation"
                   rows={3}
-                  placeholder="e.g. Failure to comply with dormitory check-in rules..."
+                  className="textarea textarea-bordered text-xs focus:textarea-primary"
                 />
               </div>
             </div>
 
-            <div className="modal-action">
+            <div className="modal-action border-t border-base-200 pt-3">
               <button
+                type="button"
                 onClick={() => setSelectedStudentForBlock(null)}
                 className="btn btn-sm btn-ghost"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleConfirmPenalty}
-                className="btn btn-sm btn-error text-white font-bold"
+                className="btn btn-sm btn-error font-bold text-white gap-1.5"
               >
-                Confirm Block
+                <ShieldAlert className="w-4 h-4" />
+                <span>Enforce Restriction</span>
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal: Add Student */}
+      {/* Modal: Create New Student */}
       {showAddStudentModal && (
         <div className="modal modal-open">
           <div className="modal-box max-w-md bg-base-100 border border-base-300 shadow-2xl">
             <div className="flex items-center justify-between pb-3 border-b border-base-200">
-              <h3 className="font-bold text-base flex items-center gap-2">
-                <UserPlus className="w-5 h-5 text-secondary" />
-                <span>Add New Student Resident</span>
+              <h3 className="font-bold text-base text-primary flex items-center gap-2">
+                <UserPlus className="w-5 h-5" />
+                <span>Register New Student</span>
               </h3>
               <button
                 onClick={() => setShowAddStudentModal(false)}
@@ -640,48 +764,55 @@ export default function AdminDashboard() {
 
             <form onSubmit={handleCreateStudent} className="py-4 space-y-3">
               <div className="form-control">
-                <label className="label text-xs font-bold">
-                  <span>Student Full Name</span>
+                <label className="label">
+                  <span className="label-text font-bold text-xs">Full Name</span>
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Bilal Saeed"
                   value={newStudentName}
                   onChange={(e) => setNewStudentName(e.target.value)}
-                  className="input input-sm input-bordered text-xs font-medium"
+                  placeholder="e.g. Tariq Bin Ziyad"
+                  className="input input-sm input-bordered text-xs focus:input-primary"
                 />
               </div>
 
               <div className="form-control">
-                <label className="label text-xs font-bold">
-                  <span>Room Number</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. C-104"
-                  value={newStudentRoom}
-                  onChange={(e) => setNewStudentRoom(e.target.value)}
-                  className="input input-sm input-bordered text-xs font-medium"
-                />
-              </div>
-
-              <div className="form-control">
-                <label className="label text-xs font-bold">
-                  <span>Email Address</span>
+                <label className="label">
+                  <span className="label-text font-bold text-xs">Email Address</span>
                 </label>
                 <input
                   type="email"
                   required
-                  placeholder="e.g. bilal@hostel.edu"
                   value={newStudentEmail}
                   onChange={(e) => setNewStudentEmail(e.target.value)}
-                  className="input input-sm input-bordered text-xs font-medium"
+                  placeholder="tariq@hostel.edu"
+                  className="input input-sm input-bordered text-xs focus:input-primary"
                 />
               </div>
 
-              <div className="modal-action pt-4">
+              <div className="form-control">
+                <label className="label">
+                  <span className="label-text font-bold text-xs">Room Number</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newStudentRoom}
+                  onChange={(e) => setNewStudentRoom(e.target.value)}
+                  placeholder="e.g. B-205"
+                  className="input input-sm input-bordered text-xs focus:input-primary"
+                />
+              </div>
+
+              <div className="p-3 bg-base-200/50 rounded-xl border border-base-300 text-[11px] text-base-content/70">
+                Default password will be set automatically to:{" "}
+                <strong className="text-primary font-mono font-black">Dorm@1234</strong>
+                <br />
+                User will be prompted with <code className="font-bold">isPasswordReset: true</code>.
+              </div>
+
+              <div className="modal-action border-t border-base-200 pt-3">
                 <button
                   type="button"
                   onClick={() => setShowAddStudentModal(false)}
@@ -689,8 +820,8 @@ export default function AdminDashboard() {
                 >
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-sm btn-secondary font-bold">
-                  Save Student
+                <button type="submit" className="btn btn-sm btn-primary font-bold">
+                  Create Student
                 </button>
               </div>
             </form>
@@ -698,14 +829,14 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* Modal: Add Chef */}
+      {/* Modal: Create New Chef */}
       {showAddChefModal && (
         <div className="modal modal-open">
           <div className="modal-box max-w-md bg-base-100 border border-base-300 shadow-2xl">
             <div className="flex items-center justify-between pb-3 border-b border-base-200">
-              <h3 className="font-bold text-base flex items-center gap-2">
-                <ChefHat className="w-5 h-5 text-emerald-500" />
-                <span>Add Mess Chef Account</span>
+              <h3 className="font-bold text-base text-primary flex items-center gap-2">
+                <ChefHat className="w-5 h-5" />
+                <span>Add Kitchen Chef Account</span>
               </h3>
               <button
                 onClick={() => setShowAddChefModal(false)}
@@ -717,49 +848,56 @@ export default function AdminDashboard() {
 
             <form onSubmit={handleCreateChef} className="py-4 space-y-3">
               <div className="form-control">
-                <label className="label text-xs font-bold">
-                  <span>Chef Name</span>
+                <label className="label">
+                  <span className="label-text font-bold text-xs">Chef Name</span>
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Chef Kareem"
                   value={newChefName}
                   onChange={(e) => setNewChefName(e.target.value)}
-                  className="input input-sm input-bordered text-xs font-medium"
+                  placeholder="e.g. Chef Youssef Al-Hassan"
+                  className="input input-sm input-bordered text-xs focus:input-primary"
                 />
               </div>
 
               <div className="form-control">
-                <label className="label text-xs font-bold">
-                  <span>Email Address</span>
+                <label className="label">
+                  <span className="label-text font-bold text-xs">Email Address</span>
                 </label>
                 <input
                   type="email"
                   required
-                  placeholder="e.g. kareem@hostel.edu"
                   value={newChefEmail}
                   onChange={(e) => setNewChefEmail(e.target.value)}
-                  className="input input-sm input-bordered text-xs font-medium"
+                  placeholder="youssef@hostel.edu"
+                  className="input input-sm input-bordered text-xs focus:input-primary"
                 />
               </div>
 
               <div className="form-control">
-                <label className="label text-xs font-bold">
-                  <span>Shift Assignment</span>
+                <label className="label">
+                  <span className="label-text font-bold text-xs">Assigned Shift</span>
                 </label>
                 <select
                   value={newChefShift}
                   onChange={(e) => setNewChefShift(e.target.value)}
-                  className="select select-sm select-bordered text-xs font-medium"
+                  className="select select-sm select-bordered text-xs focus:select-primary"
                 >
                   <option value="Morning & Lunch Session">Morning & Lunch Session</option>
-                  <option value="Dinner & Night Session">Dinner & Night Session</option>
-                  <option value="All-Day Station Supervisor">All-Day Station Supervisor</option>
+                  <option value="Lunch & Evening Session">Lunch & Evening Session</option>
+                  <option value="Full Day Mess Manager">Full Day Mess Manager</option>
                 </select>
               </div>
 
-              <div className="modal-action pt-4">
+              <div className="p-3 bg-base-200/50 rounded-xl border border-base-300 text-[11px] text-base-content/70">
+                Default password will be set automatically to:{" "}
+                <strong className="text-primary font-mono font-black">Dorm@1234</strong>
+                <br />
+                User will be prompted with <code className="font-bold">isPasswordReset: true</code>.
+              </div>
+
+              <div className="modal-action border-t border-base-200 pt-3">
                 <button
                   type="button"
                   onClick={() => setShowAddChefModal(false)}
@@ -767,8 +905,8 @@ export default function AdminDashboard() {
                 >
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-sm btn-secondary font-bold">
-                  Save Chef
+                <button type="submit" className="btn btn-sm btn-primary font-bold">
+                  Create Chef
                 </button>
               </div>
             </form>
