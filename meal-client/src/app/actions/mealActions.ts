@@ -3,6 +3,7 @@
 import { getDatabase } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
 import { getCurrentSaturday } from "./authActions";
+import { logAuditEvent } from "@/lib/audit";
 
 export type DayKey = "sat" | "sun" | "mon" | "tue" | "wed" | "thu" | "fri";
 
@@ -23,6 +24,12 @@ export async function toggleGlobalLockAction(
       { $set: { key: "global_settings", isGlobalLocked: nextLock, updatedAt: new Date() } },
       { upsert: true }
     );
+
+    // Record audit event
+    await logAuditEvent({
+      action: "TOGGLE_GLOBAL_LOCK",
+      details: { isGlobalLocked: nextLock },
+    });
 
     return {
       success: true,
@@ -222,6 +229,13 @@ export async function toggleStudentBlockAction(payload: {
       }
     );
 
+    // Record audit event
+    await logAuditEvent({
+      action: isBlocked ? "BLOCK_STUDENT" : "UNBLOCK_STUDENT",
+      targetId: studentId,
+      details: { isBlocked, reason: reason || "" },
+    });
+
     return {
       success: true,
       message: `Student meal privileges ${isBlocked ? "BLOCKED" : "UNBLOCKED"} successfully.`,
@@ -259,6 +273,13 @@ export async function adminOverrideLunchAction(payload: {
       },
       { upsert: true }
     );
+
+    // Record audit event
+    await logAuditEvent({
+      action: "OVERRIDE_LUNCH",
+      targetId: studentId,
+      details: { day, selected: newVal, weekStartDate: weekStart },
+    });
 
     return {
       success: true,

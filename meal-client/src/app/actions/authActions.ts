@@ -4,6 +4,12 @@ import { getDatabase } from "@/lib/mongodb";
 import bcrypt from "bcryptjs";
 import { ObjectId } from "mongodb";
 import { cookies } from "next/headers";
+import {
+  checkRateLimit,
+  recordFailedLoginAttempt,
+  clearFailedLoginAttempts,
+  logAuditEvent,
+} from "@/lib/audit";
 
 export type Role = "student" | "admin" | "chef";
 
@@ -63,10 +69,26 @@ export async function loginAction(
       };
     }
 
+    // 1. Security Check: Rate Limiting & Brute-Force Protection
+    const rateLimit = await checkRateLimit(email);
+    if (rateLimit.isBlocked) {
+      return {
+        success: false,
+        message: rateLimit.message || "Account is temporarily locked. Please try again later.",
+      };
+    }
+
     const db = await getDatabase();
     const user = await db.collection("users").findOne({ email });
 
     if (!user) {
+      const fail = await recordFailedLoginAttempt(email);
+      if (fail.isNowLocked) {
+        return {
+          success: false,
+          message: fail.message || "Account locked for 15 minutes due to multiple failed attempts.",
+        };
+      }
       return {
         success: false,
         message: "Invalid email or password.",
@@ -82,11 +104,24 @@ export async function loginAction(
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
+      const fail = await recordFailedLoginAttempt(email);
+      if (fail.isNowLocked) {
+        return {
+          success: false,
+          message: fail.message || "Account locked for 15 minutes due to multiple failed attempts.",
+        };
+      }
       return {
         success: false,
-        message: "Invalid email or password.",
+        message:
+          fail.attemptsLeft <= 2
+            ? `Invalid email or password. (${fail.attemptsLeft} attempt(s) remaining before security lockout).`
+            : "Invalid email or password.",
       };
     }
+
+    // 2. Clear failed attempts counter upon successful authentication
+    await clearFailedLoginAttempts(email);
 
     const userSession: UserSessionData = {
       id: user._id.toString(),
@@ -337,6 +372,14 @@ export async function createUserAction(payload: {
       isPasswordReset: true,
     };
 
+    // Log administrative action to audit trail
+    await logAuditEvent({
+      action: "CREATE_USER",
+      targetId: insertedId,
+      targetEmail: email,
+      details: { name, role, room: doc.room, shift: doc.shift },
+    });
+
     return {
       success: true,
       message: `${role === "chef" ? "Chef" : "Student"} account created successfully with default password "Dorm@1234".`,
@@ -358,9 +401,20 @@ export async function deleteUserAction(userId: string): Promise<{ success: boole
   try {
     const db = await getDatabase();
     const objId = new ObjectId(userId);
+    const existing = await db.collection("users").findOne({ _id: objId });
+
     await db.collection("users").deleteOne({ _id: objId });
     await db.collection("mealselections").deleteMany({ studentId: objId });
     await db.collection("attendances").deleteMany({ studentId: objId });
+
+    // Log administrative deletion
+    await logAuditEvent({
+      action: "DELETE_USER",
+      targetId: userId,
+      targetEmail: existing?.email,
+      details: { name: existing?.name, role: existing?.role },
+    });
+
     return { success: true, message: "User deleted successfully." };
   } catch (error: any) {
     return { success: false, message: error.message || "Failed to delete user." };
@@ -374,6 +428,7 @@ export async function resetPasswordAction(userId: string): Promise<{ success: bo
   try {
     const db = await getDatabase();
     const objId = new ObjectId(userId);
+    const targetUser = await db.collection("users").findOne({ _id: objId });
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(DEFAULT_PASSWORD, salt);
 
@@ -387,6 +442,14 @@ export async function resetPasswordAction(userId: string): Promise<{ success: bo
         },
       }
     );
+
+    // Log administrative password reset
+    await logAuditEvent({
+      action: "RESET_PASSWORD",
+      targetId: userId,
+      targetEmail: targetUser?.email,
+      details: { defaultPasswordRestored: true, userName: targetUser?.name },
+    });
 
     return { success: true, message: `Password reset to "${DEFAULT_PASSWORD}".` };
   } catch (error: any) {

@@ -658,8 +658,8 @@ npm run seed
 - [x] **Route Protection (Middleware)**: Edge-wide route guard in `src/middleware.ts` using secure `meal_session` cookies to protect `/dashboard/*` routes and isolate roles.
 - [x] **Production Gating**: Strictly disabled `simulateFriday` in production builds (`NODE_ENV === "production"`), locking selection to the real calendar Friday (`getDay() === 5`).
 - [x] **UI/UX Modernization**: Redesigned dashboards, modals, statistics cards, and responsive layouts with DaisyUI and Tailwind CSS.
-- [ ] **Audit Logs & Recovery**: Log admin actions (blocking students, overriding meal choices) into an `auditlogs` collection.
-- [ ] **Rate Limiting & Brute Force Protection**: Implement IP/email rate limiting on login actions.
+- [x] **Audit Logs & Recovery**: Implemented `auditlogs` collection logging critical administrative operations (student block/unblock, meal overrides, user creation/deletion, password resets, global lock toggling).
+- [x] **Rate Limiting & Brute Force Protection**: Implemented database-backed attempt tracking in `login_attempts` with automatic 15-minute account lockouts after 5 consecutive failed attempts.
 - [ ] **HTTPS & Deployment Setup**: Production domain configuration, SSL, and containerized/Vercel deployment setup.
 
 
@@ -691,8 +691,8 @@ npm run seed
 | **Route Protection (Middleware)** | ✅ **COMPLETED**: Implemented `src/middleware.ts` using httpOnly session cookies (`meal_session`). Edge guards protect `/dashboard/*` with role enforcement, and redirect unauthenticated users to `/login`. | Fully active and verified in build. |
 | **Friday Simulation Toggle** | ✅ **COMPLETED**: The dev simulator button in Student Dashboard and context toggle logic are strictly gated behind `process.env.NODE_ENV !== "production"`. In production, only the real Friday calendar day (`getDay() === 5`) allows meal selection. | Fully active and verified in build. |
 | **Password Change & Reset** | ✅ **COMPLETED**: Implemented `updatePasswordAction` Server Action with `bcryptjs` hashing, MongoDB user update, and `isPasswordReset: false` flip. Admin reset resets to hashed `Dorm@1234` with `isPasswordReset: true`. | Fully active and verified in build. |
-| **Audit Logs & Recovery** | Actions execute directly against MongoDB without audit history. | Admin actions (blocking a student, meal overrides) should ideally write to an `AuditLog` collection. |
-| **Rate Limiting & Brute Force** | The login Server Action does not rate-limit repeated bad passwords. | Add a rate limiter (e.g., Upstash Redis or a simple Mongo attempt counter) to prevent brute-force attacks on the single login form. |
+| **Audit Logs & Recovery** | ✅ **COMPLETED**: `auditlogs` collection records administrative actions (student blocks/unblocks, meal overrides, password resets, user creations and deletions) with actor metadata. | Fully active in MongoDB Server Actions. |
+| **Rate Limiting & Brute Force** | ✅ **COMPLETED**: Implemented rate limiting in `src/lib/audit.ts` and `loginAction`. Locks out accounts after 5 failed attempts for 15 minutes with dynamic attempt warning counts. | Fully active in authentication flow. |
 | **HTTPS & Production Env** | Running locally with `localhost` URLs. | Configure custom domain, SSL, production environment variables (`NEXT_PUBLIC_APP_URL`, production DB URI with restricted IP whitelist), and deployment host (Vercel, AWS, or Docker). |
 
 ---
@@ -701,7 +701,7 @@ npm run seed
 1. [x] **Add `middleware.ts`**: Protected `/dashboard/*` routes so unauthorized users are kicked back to `/login` immediately before rendering.
 2. [x] **Gate Dev Toggles**: Wrapped `toggleFridaySimulation` in `process.env.NODE_ENV !== "production"`.
 3. [x] **Fix Password Change**: Wired direct MongoDB Server Action with bcryptjs and session cookie synchronization.
-4. [ ] **Audit Logs & Rate Limiting**: Implement MongoDB-backed audit logging for admin actions and rate limiting for login attempts.
+4. [x] **Audit Logs & Rate Limiting**: Implemented MongoDB-backed audit logging for admin actions and rate limiting for login attempts.
 
 ### Recent Session Execution Report (Completed)
 - **Password Management**: Implemented `updatePasswordAction` in `src/app/actions/authActions.ts`, updated `PasswordChangeModal.tsx` with one-click autofill for default credentials, show/hide eye toggle, validation, and database password reset flag updates.
