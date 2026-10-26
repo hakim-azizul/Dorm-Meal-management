@@ -85,22 +85,27 @@ weekly-meal/
 │       │   ├── layout.tsx          ← Root layout with <Providers>, <Navbar>, <Footer>
 │       │   ├── page.tsx            ← Landing page
 │       │   ├── globals.css         ← Tailwind + DaisyUI CSS imports
-│       │   ├── providers.tsx       ← Wraps Theme > Language > MealApp context providers
+│       │   ├── providers.tsx       ← Theme > Language > MealApp providers
 │       │   ├── api/
-│       │   │   └── auth/[...all]/route.ts   ← Better Auth route handler
+│       │   │   └── auth/
+│       │   │       └── [...all]/
+│       │   │           └── route.ts   ← Better Auth route handler
 │       │   ├── login/
 │       │   │   └── page.tsx        ← Role-selector login (Student / Admin / Chef tabs)
 │       │   └── dashboard/
-│       │       ├── student/page.tsx
-│       │       ├── admin/page.tsx
-│       │       └── chef/page.tsx
+│       │       ├── admin/
+│       │       │   └── page.tsx
+│       │       ├── chef/
+│       │       │   └── page.tsx
+│       │       └── student/
+│       │           └── page.tsx
 │       ├── components/
 │       │   ├── Navbar.tsx          ← Sticky navbar, role-isolated nav links, theme + lang toggles
 │       │   └── Footer.tsx
 │       ├── context/
-│       │   ├── ThemeContext.tsx     ← light/dark toggle, persisted in localStorage, sets data-theme on <html>
-│       │   ├── LanguageContext.tsx  ← en/ar toggle, sets dir="rtl" on <html>, translation dictionary
-│       │   └── MealAppContext.tsx   ← Role state, API calls, optimistic updates, mock fallback data
+│       │   ├── ThemeContext.tsx    ← light/dark toggle, persisted in localStorage, sets data-theme on <html>
+│       │   ├── LanguageContext.tsx ← en/ar toggle, sets dir="rtl" on <html>, translation dictionary
+│       │   └── MealAppContext.tsx  ← Role state, API calls, optimistic updates, mock fallback data
 │       └── lib/
 │           ├── api.ts              ← Centralized typed API client
 │           ├── auth.ts             ← Better Auth server config
@@ -125,7 +130,7 @@ weekly-meal/
     └── routes/
         ├── mealRoutes.js       ← /api/meals/*
         ├── adminRoutes.js      ← /api/admin/*
-        └── chefRoutes.js      ← /api/chef/*
+        └── chefRoutes.js       ← /api/chef/*
 ```
 
 ---
