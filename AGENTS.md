@@ -10,742 +10,792 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ---
 
-# Hostel Meal Management System — Agent Guidelines
+# Hostel Meal Management System — Architecture & Operational Blueprint
 
-> **IMPORTANT:** This document is the single source of truth for all AI agents working on this project. Read it in full before writing any code. The project is a **fully implemented, production-grade full-stack application**. Do NOT stub, scaffold, or restart anything that already exists — build only what is explicitly missing.
-
----
-
-## Table of Contents
-
-1. [Project Overview](#1-project-overview)
-2. [Tech Stack & Versions](#2-tech-stack--versions)
-3. [Folder Structure](#3-folder-structure)
-4. [Business Rules & Permissions](#4-business-rules--permissions)
-5. [Backend: meal-server/](#5-backend-meal-server)
-   - [Database Models](#51-database-models)
-   - [API Endpoints Reference](#52-api-endpoints-reference)
-   - [Running the Backend](#53-running-the-backend)
-6. [Frontend: meal-client/](#6-frontend-meal-client)
-   - [Context Providers](#61-context-providers)
-   - [Pages & Routes](#62-pages--routes)
-   - [Components](#63-components)
-   - [API Client](#64-api-client-srclibapits)
-   - [Running the Frontend](#65-running-the-frontend)
-7. [Environment Variables](#7-environment-variables)
-8. [Critical Known Issues & Constraints](#8-critical-known-issues--constraints)
-9. [Seeding the Database](#9-seeding-the-database)
-10. [Full Local Development Setup](#10-full-local-development-setup)
-11. [Localization & Styling Rules](#11-localization--styling-rules)
-12. [Future Tasks & Open Issues](#12-future-tasks--open-issues)
+> **CRITICAL DIRECTIVE FOR ALL DEVELOPERS & AI AGENTS:**
+> This specification is the **exclusive, single source of truth** for the Hostel Meal Management System. It replaces all legacy documentation, meeting transcripts, changelogs, and historical notes. The system documented herein is a fully operational, production-grade application featuring dual-tier execution, cryptographic JWT authentication, edge-level middleware guards, role-isolated workflows, and a strictly disciplined MongoDB Atlas persistence layer. Every technical rule, schema definition, API contract, and operational boundary specified here is absolute.
 
 ---
 
-## 1. Project Overview
+## 1. System Architecture & Dual-Deployment Model
 
-A role-based **Hostel Meal Management System** with three distinct user roles: **Student**, **Admin (Warden)**, and **Chef (Mess Manager)**.
+The system is constructed as a decoupled, multi-tiered enterprise architecture composed of a presentation/edge orchestration layer (`meal-client`) and an independent RESTful microservice API layer (`meal-server`), backed by a unified cloud database cluster (`MongoDB Atlas`).
 
-- Students choose their weekly lunch preferences (Friday-only window).
-- Admin controls the global meal lock, manages student accounts, applies punishments/blocks, and can manually override any meal selection.
-- Chef marks daily attendance (breakfast/lunch/dinner). Lunch lists are **strictly pre-selection-gated**; breakfast and dinner show all students.
-- An absence-based **Red-Flag** penalty system auto-flags students who miss a pre-selected lunch.
+```
+                              ┌─────────────────────────────────────────────────────────┐
+                              │                    BROWSER CLIENT                       │
+                              │  - Next.js 16 Client Components (React 19)              │
+                              │  - ThemeContext (DaisyUI 5.7), LanguageContext (EN/AR)  │
+                              │  - MealAppContext (Optimistic UI & Client Cache)        │
+                              └──────────────┬───────────────────────────┬──────────────┘
+                                             │                           │
+                   (Browser Requests & SSR)  │                           │  (Direct Client REST
+                   Includes 'meal_session'   │                           │   with Bearer JWT)
+                   HttpOnly Cookie           │                           │
+                                             ▼                           │
+              ┌────────────────────────────────────────────────┐         │
+              │         MEAL-CLIENT (Next.js 16.4.3)            │         │
+              │  - Edge Middleware (src/middleware.ts)         │         │
+              │  - Server Actions (authActions, mealActions)   │         │
+              │  - Cryptographic Engine (jose HS256)           │         │
+              │  - Native Mongo Driver Pool (mongodb 7.7)      │         │
+              └──────────────┬─────────────────────────────────┘         │
+                             │                                           │
+                             │ (Direct Server Action Driver Calls)       │
+                             │                                           ▼
+                             │                        ┌─────────────────────────────────────┐
+                             │                        │      MEAL-SERVER (Express 5.3.0)    │
+                             │                        │  - REST API Engine (CORS, Express)  │
+                             │                        │  - JWT Middleware (jsonwebtoken)    │
+                             │                        │  - Mongoose 9.11.4 ODM Layer        │
+                             │                        │  - Rate Limiting & Admin Auditing   │
+                             │                        └──────────────────┬──────────────────┘
+                             │                                           │
+                             ▼                                           ▼
+              ┌─────────────────────────────────────────────────────────────────────────────┐
+              │                         MONGODB ATLAS CLOUD REPLICA SET                     │
+              │   Database: `weekly-meal`                                                   │
+              │   Collections: users, mealselections, attendances, systemconfigs,           │
+              │                login_attempts, auditlogs                                    │
+              └─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 1.1 Dual-Architecture Interaction Topology
+
+The platform operates across two concurrent delivery models:
+
+1. **Edge-SSR & Server Actions (`meal-client`)**:
+   - Built on Next.js 16 (App Router) running on Node/Vercel Serverless.
+   - Incoming route navigation (`/dashboard/*`) is intercepted at the edge by `src/middleware.ts`, validating the cryptographically sealed `meal_session` cookie via `jose`.
+   - Core interactive user operations (login, password modifications, attendance recording, global lock toggling, student blocking) execute directly via Next.js Server Actions (`src/app/actions/*`). These actions communicate directly with MongoDB Atlas via the pooled singleton in `src/lib/mongodb.ts`.
+
+2. **Decoupled REST API (`meal-server`)**:
+   - Built on Express 5.3.0 running as an independent Node.js daemon (Render/Railway/Docker).
+   - Serves as the central API gateway for programmatic external integrations, legacy clients, mess scanner terminals, and background schedulers.
+   - Routes (`/api/auth`, `/api/meals`, `/api/admin`, `/api/chef`) enforce Bearer JWT verification via `middleware/auth.js` with strict role authorizations.
+   - Utilizes Mongoose 9.11.4 schemas with strict schema typing, pre-compile indexes, and 365-day TTL expiry mechanisms.
+
+3. **Client API Bridge (`src/lib/api.ts`)**:
+   - Provides fully typed client-side fetchers targeting the Express backend.
+   - Automatically attaches the Bearer token stored in `localStorage` (`meal_jwt_token`).
+   - Translates backend JSON responses into standardized typed contracts (`ApiResponse<T>`, `StudentSelectionData`, `ChefTodayListResponse`).
 
 ---
 
-## 2. Tech Stack & Versions
+## 2. Complete Security & Authentication Pipeline
 
-| Layer | Technology | Version |
-|---|---|---|
-| Frontend | Next.js (App Router) | 16.4.3 |
-| Frontend | React | 19.3.0 |
-| Frontend | TypeScript | ^5 |
-| Frontend | Tailwind CSS | ^4 |
-| Frontend | DaisyUI | 5.7.50 |
-| Frontend | lucide-react | ^1.61.0 |
-| Frontend | better-auth | ^1.7.13 |
-| Backend | Express.js | ^5.3.0 |
-| Backend | Mongoose | ^9.11.4 |
-| Database | MongoDB Atlas | — |
-| Runtime | Node.js | (LTS) |
+```
+                                  AUTHENTICATION LIFECYCLE
+                                  
+  ┌──────────────┐             ┌─────────────────────┐              ┌───────────────────────────┐
+  │ User Inputs  │ ──────────> │   Rate-Limiter      │ ───────────> │  Database Password Check  │
+  │ Credentials  │             │  (5 tries / 15 min) │              │  (bcrypt.compare vs hash) │
+  └──────────────┘             └──────────┬──────────┘              └─────────────┬─────────────┘
+                                          │ Fail Count >= 5                       │ Match OK
+                                          ▼                                       ▼
+                               ┌─────────────────────┐              ┌───────────────────────────┐
+                               │ 15-Minute Lockout   │              │ Sign JWT Payload (HS256)  │
+                               │ in `login_attempts` │              │ Expiration: 7 Days        │
+                               └─────────────────────┘              └─────────────┬─────────────┘
+                                                                                  │
+                                      ┌───────────────────────────────────────────┴────────────────┐
+                                      ▼                                                            ▼
+                       ┌──────────────────────────────┐                             ┌──────────────────────────────┐
+                       │  Edge HttpOnly Cookie        │                             │  Client LocalStorage Token   │
+                       │  Name: `meal_session`        │                             │  Key: `meal_jwt_token`       │
+                       │  Scope: Path=/, SameSite=Lax │                             │  Scope: SPA REST API Headers │
+                       └──────────────┬───────────────┘                             └──────────────────────────────┘
+                                      │
+                                      ▼
+                       ┌──────────────────────────────┐
+                       │  Route Middleware Guard      │
+                       │  src/middleware.ts           │
+                       │  Validates role per path     │
+                       └──────────────────────────────┘
+```
+
+### 2.1 Cryptographic Token Standards & Secrets
+- **Algorithm**: HMAC SHA-256 (`HS256`).
+- **Signature Secret**: Configured through `JWT_SECRET` in both environment tiers. Fallback secret: `super_secret_hostel_meal_jwt_key_2026_production_safe`.
+- **Token Duration**: Exactly 7 days (`7d` / `604800` seconds).
+- **Libraries**:
+  - `meal-client`: `jose` (`SignJWT`, `jwtVerify`) for zero-dependency edge runtime compatibility.
+  - `meal-server`: `jsonwebtoken` for Node.js Express middleware compatibility.
+- **Session Payload Schema (`SessionPayload`)**:
+  ```typescript
+  export interface SessionPayload {
+    id: string;              // User MongoDB ObjectId string
+    name: string;            // Full display name
+    email: string;           // Normalized lowercase unique email
+    role: "student" | "admin" | "chef";
+    room?: string;           // Student hostel room (e.g. "A-204")
+    shift?: string;          // Chef operational shift
+    isBlocked?: boolean;     // Warden disciplinary ban state
+    penaltyReason?: string;  // Active ban description
+    isRedFlagged?: boolean;  // Unexcused absence penalty state
+    isPasswordReset?: boolean; // Forces password update upon initial login
+  }
+  ```
+
+### 2.2 Edge Route Guard Execution Flow (`src/middleware.ts`)
+The Next.js Edge Middleware intercepts all requests matching `["/dashboard/:path*", "/login"]`:
+1. **Extraction**: Inspects `request.cookies.get("meal_session")`.
+2. **Cryptographic Validation**: Executes `verifyJwtToken()` using `jose.jwtVerify`. If malformed or signature fails, `sessionUser` resolves to `null`.
+3. **Root Dashboard Route (`/dashboard` or `/dashboard/`)**:
+   - If unauthenticated: Redirects to `/login?from=/dashboard`.
+   - If authenticated: Redirects to `/dashboard/${sessionUser.role}`.
+4. **Role Isolation Route Guards (`/dashboard/*`)**:
+   - If unauthenticated: Redirects to `/login?from=${pathname}`.
+   - If `pathname.startsWith("/dashboard/admin")` and `role !== "admin"`: Redirects to `/dashboard/${sessionUser.role}`.
+   - If `pathname.startsWith("/dashboard/chef")` and `role !== "chef"`: Redirects to `/dashboard/${sessionUser.role}`.
+   - If `pathname.startsWith("/dashboard/student")` and `role !== "student"`: Redirects to `/dashboard/${sessionUser.role}`.
+5. **Anti-Login Redirection (`/login`)**:
+   - If a valid session cookie exists, the user is forbidden from viewing the login screen and redirected directly to `/dashboard/${sessionUser.role}`.
+
+### 2.3 Password Security & Lifecycle
+- **Hashing**: `bcryptjs` utilizing salt rounds of `10`.
+- **Default Provisioning Password**: When an admin seeds the database or creates a student/chef via UI or API, the account is created with `Dorm@1234` and `isPasswordReset: true`.
+- **Mandatory Password Change**: The system checks `user.isPasswordReset`. When `true`, the user is prompted to set a permanent password (minimum 6 characters) via `PasswordChangeModal.tsx`.
+- **Self-Service Password Updates**: Handled by `updatePasswordAction()` (Server Action) and `POST /api/auth/change-password` (REST). If the user previously completed a reset, the existing password is verified before overwriting.
+- **Administrative Password Reset**: Admins can invoke `resetPasswordAction()` or `POST /api/admin/reset-password`. The target user's password is restored to `Dorm@1234` and `isPasswordReset` is reset to `true`.
+
+### 2.4 Brute-Force Rate Limiting Engine (`login_attempts`)
+- **Collection**: `login_attempts`
+- **Threshold**: Maximum **5** failed attempts per email address.
+- **Lockout Duration**: **15 minutes** (`900,000` ms).
+- **Execution Lifecycle**:
+  1. On each authentication request, `checkRateLimit(email)` queries `login_attempts`.
+  2. If `lockedUntil > Date.now()`, authentication is blocked immediately with a calculated remaining time message.
+  3. If expired, the record is expunged and access is evaluated.
+  4. Failed password comparisons call `recordFailedLoginAttempt(email)`, incrementing `attempts` and setting `lockedUntil` once 5 attempts are hit.
+  5. Successful authentication triggers `clearFailedLoginAttempts(email)`, removing the record.
+
+### 2.5 Administrative Audit Trail (`auditlogs`)
+Every state-altering administrative or disciplinary operation creates an immutable entry in the `auditlogs` collection via `logAuditEvent()`:
+- **Tracked Actions**:
+  - `CREATE_USER`: Account creation (student or chef).
+  - `DELETE_USER`: Account deletion and cascading data cleanup.
+  - `RESET_PASSWORD`: Admin-enforced password reset to default.
+  - `BLOCK_STUDENT` / `UNBLOCK_STUDENT`: Meal privilege suspensions with penalty reasons.
+  - `OVERRIDE_LUNCH`: Manual warden intervention on weekly lunch schedules.
+  - `TOGGLE_GLOBAL_LOCK`: Global meal selection lock freezes.
+- **Captured Metadata**: Timestamp, actor ObjectId, actor email, actor role, target ObjectId, target email, and structured JSON change payload.
 
 ---
 
-## 3. Folder Structure
+## 3. Comprehensive Business Rules & Role Matrices
+
+### 3.1 Role Permissions Matrix
+
+| Capability / Action | Student | Admin (Warden) | Chef (Mess Manager) |
+|---|:---:|:---:|:---:|
+| View Personal Weekly Schedule | Full | Read/Override | No |
+| Select / Deselect Friday Lunches | Friday Only | Anytime Override | No |
+| View Global Attendance Roaster | No | Full List | Daily Session Only |
+| Toggle Global Selection Lock | No | Full Control | No |
+| Suspend Student Privileges (`isBlocked`) | No | Full Control | No |
+| Mark Breakfast / Dinner Attendance | No | View Audits | Check-in Eligible |
+| Mark Lunch Attendance | No | View Audits | Pre-Selected Only |
+| Trigger / Clear Red-Flag Absences | No | View Flags | Auto on Lunch Absent |
+| User Provisioning & Password Resets | Self Change | Full Control | Self Change |
+
+---
+
+### 3.2 Student Business Rules
+1. **Operating Week Structure**:
+   - The meal schedule follows a fixed 7-day cycle: **Saturday through Friday**.
+   - Current week start date (`weekStartDate`) is always the ISO date string (`YYYY-MM-DD`) of the nearest past Saturday.
+2. **Fixed Daily Meals (Breakfast & Dinner)**:
+   - Breakfast and dinner are universally pre-selected and fully funded for all enrolled residents.
+   - No interactive checkboxes exist for breakfast or dinner; they are displayed as guaranteed daily allotments:
+     - *Breakfast*: Standard continental spread (Fresh bread, eggs, butter, jam, tea).
+     - *Dinner*: Standard hot dinner (Grilled chicken/lentil dal, basmati rice, salad).
+3. **Friday-Only Lunch Selection Window**:
+   - Students may **only** alter lunch preferences on **Fridays** (`new Date().getDay() === 5`).
+   - On Saturday through Thursday, all lunch checkboxes are rendered disabled and non-interactive.
+   - **Development Simulation Flag**: In development (`NODE_ENV === "development"`), students can toggle the "Simulate Friday Selection Window" switch. This sends `simulateFriday: true` to bypass the day check for testing. In production, this flag is strictly ignored.
+4. **Administrative Block Enforcements**:
+   - If `user.isBlocked === true`, the student is barred from making meal selections.
+   - An alert banner is displayed: `"ACCESS RESTRICTED: Your meal selection privileges have been temporarily suspended by the warden."`
+5. **Absence Penalty Warning (Red-Flag)**:
+   - If `user.isRedFlagged === true`, a warning banner is displayed: `"ABSENCE WARNING: You missed a previously pre-selected lunch. Please check in with the kitchen chef on your next meal to clear your red flag."`
+6. **Global Lock State**:
+   - If `SystemConfig.isGlobalLocked === true`, all student selection controls freeze regardless of the day of the week.
+
+---
+
+### 3.3 Admin (Hostel Warden) Business Rules
+1. **Global Selection Lock**:
+   - Controls `SystemConfig.isGlobalLocked`.
+   - Activating the lock immediately freezes meal selection for all students across the entire institution.
+   - Deactivating the lock restores normal Friday-only rules.
+2. **Student Meal Privilege Suspension**:
+   - Admins can block or unblock any student individually.
+   - When blocking, an administrative reason is attached (`penaltyReason`), displayed directly on the student's dashboard.
+   - When unblocking, `penaltyReason` is wiped.
+3. **Direct Meal Override (Single-Day & Full-Week)**:
+   - The warden can manually override any student's lunch selection for any day of the current week.
+   - Bypasses all restrictions: Friday-only rules, global lock state, and student block status.
+4. **Account Management**:
+   - Create student accounts (auto-assigns Room, hashes default password, seeds initial `MealSelection`).
+   - Create chef accounts (assigns Shift schedule, hashes default password).
+   - Delete users with cascading deletion of corresponding `MealSelection` and `Attendance` records.
+   - Reset any user's password to `Dorm@1234`.
+
+---
+
+### 3.4 Chef (Mess Manager) Business Rules
+1. **Daily Operational Session Isolation**:
+   - The chef interface is locked strictly to **today's operating date**.
+   - Divided into three distinct meal tabs: **Breakfast**, **Lunch**, and **Dinner**.
+2. **Breakfast & Dinner Attendance**:
+   - All enrolled, non-blocked students appear on the roster as eligible.
+   - Marking a student present records attendance.
+   - **Auto-Clearing Red Flags**: If a student arrives with an active `isRedFlagged` status and is marked `present` at breakfast or dinner, their red flag is automatically cleared.
+3. **Lunch Attendance — Strict Pre-Selection Gating**:
+   - **Mandatory Filter**: Only students whose `MealSelection.lunchSelections[todayKey] === true` appear in the lunch attendance list.
+   - Students who opted out or failed to select lunch are completely excluded from the roster.
+4. **Absence & Red-Flag Generation**:
+   - If a student pre-selected lunch but does not attend, the chef marks them **Absent**.
+   - Marking a student **Absent** for lunch immediately sets `User.isRedFlagged = true`.
+   - Marking a student **Present** for lunch clears `isRedFlagged = false`.
+
+---
+
+## 4. Deep Directory & File Structure Guide
 
 ```
 weekly-meal/
-├── AGENTS.md                   ← This file
-├── meal-client/                ← Next.js 16 frontend
-│   ├── .env
-│   ├── next.config.ts
-│   ├── package.json
-│   ├── tsconfig.json
+├── AGENTS.md                               ← Single Source of Truth Architecture Document
+├── meal-client/                            ← Next.js 16.4.3 App Router Frontend & Edge Tier
+│   ├── .env                                ← Client Environment Variables
+│   ├── next.config.ts                      ← Next.js configuration (React Compiler, Turbopack)
+│   ├── package.json                        ← Dependencies and build scripts
+│   ├── tsconfig.json                       ← TypeScript compiler paths & strict settings
 │   └── src/
+│       ├── middleware.ts                   ← Edge runtime JWT route authentication guard
 │       ├── app/
-│       │   ├── layout.tsx          ← Root layout with <Providers>, <Navbar>, <Footer>
-│       │   ├── page.tsx            ← Landing page
-│       │   ├── globals.css         ← Tailwind + DaisyUI CSS imports
-│       │   ├── providers.tsx       ← Theme > Language > MealApp providers
+│       │   ├── globals.css                 ← Tailwind CSS 4, DaisyUI v5 CSS imports
+│       │   ├── layout.tsx                  ← Root Layout (HTML shell, Theme, Navbar, Footer)
+│       │   ├── page.tsx                    ← Public Landing Page with system metrics & pills
+│       │   ├── providers.tsx               ← Nested Context Providers mounting pipeline
+│       │   ├── actions/
+│       │   │   ├── authActions.ts          ← Direct Server Actions for Login, User CRUD, Passwords
+│       │   │   ├── mealActions.ts          ← Direct Server Actions for Meals, Locks, Overrides
+│       │   │   └── auditActions.ts         ← Server Actions for fetching administrative audit logs
 │       │   ├── api/
 │       │   │   └── auth/
-│       │   │       └── [...all]/
-│       │   │           └── route.ts   ← Better Auth route handler
+│       │   │       └── login/
+│       │   │           └── route.ts        ← Next.js Route Handler for JWT cookie generation
 │       │   ├── login/
-│       │   │   └── page.tsx        ← Role-selector login (Student / Admin / Chef tabs)
+│       │   │   └── page.tsx                ← Unified Role-Selector Login Page
 │       │   └── dashboard/
 │       │       ├── admin/
-│       │       │   └── page.tsx
+│       │       │   └── page.tsx            ← Warden Portal: Locks, Roster, Penalties, Overrides
 │       │       ├── chef/
-│       │       │   └── page.tsx
+│       │       │   └── page.tsx            ← Mess Portal: Attendance, Lunch Gating, Red-Flags
 │       │       └── student/
-│       │           └── page.tsx
+│       │           └── page.tsx            ← Resident Portal: 7-day Meal Grid, Friday selection
 │       ├── components/
-│       │   ├── Navbar.tsx          ← Sticky navbar, role-isolated nav links, theme + lang toggles
-│       │   └── Footer.tsx
+│       │   ├── Navbar.tsx                  ← Sticky Navigation Bar with Role isolation & Language
+│       │   ├── Footer.tsx                  ← Application Footer
+│       │   ├── PasswordChangeModal.tsx     ← Force password update modal for newly seeded accounts
+│       │   └── ui/
+│       │       ├── AlertBanner.tsx         ← Typed alert notification banner (DaisyUI styled)
+│       │       ├── StatCard.tsx            ← Modular metric card with badges & theme accents
+│       │       └── DatabaseStatusBadge.tsx ← Real-time MongoDB Atlas online status indicator
 │       ├── context/
-│       │   ├── ThemeContext.tsx    ← light/dark toggle, persisted in localStorage, sets data-theme on <html>
-│       │   ├── LanguageContext.tsx ← en/ar toggle, sets dir="rtl" on <html>, translation dictionary
-│       │   └── MealAppContext.tsx  ← Role state, API calls, optimistic updates, mock fallback data
+│       │   ├── ThemeContext.tsx            ← DaisyUI theme switcher (light/dark) via localStorage
+│       │   ├── LanguageContext.tsx         ← English/Arabic dictionary & RTL layout switcher
+│       │   └── MealAppContext.tsx          ← Master state provider, optimistic updates, session sync
 │       └── lib/
-│           ├── api.ts              ← Centralized typed API client
-│           ├── auth.ts             ← Better Auth server config
-│           └── auth-client.ts      ← Better Auth client config
-└── meal-server/                ← Express.js backend
-    ├── .env
-    ├── .gitignore
-    ├── index.js                ← Entry point; mounts all routes
-    ├── seed.js                 ← One-time MongoDB data seeder
-    ├── package.json
+│           ├── api.ts                      ← Typed HTTP client for Express backend communication
+│           ├── audit.ts                    ← Rate limiting checks & audit logging persistence
+│           ├── auth.ts                     ← Edge-compatible JWT signing and verification (jose)
+│           └── mongodb.ts                  ← MongoDB native client connection pool & singleton
+└── meal-server/                            ← Express 5.3.0 REST Backend Microservice Tier
+    ├── .env                                ← Server Environment Variables
+    ├── index.js                            ← Express application entry point & route mounting
+    ├── package.json                        ← Server dependencies & execution scripts
+    ├── seed.js                             ← Primary database seeder (SystemConfig & Admin user)
     ├── config/
-    │   └── db.js               ← Mongoose connectDB() helper
-    ├── models/
-    │   ├── User.js
-    │   ├── MealSelection.js
-    │   ├── Attendance.js
-    │   └── SystemConfig.js
+    │   └── db.js                           ← Mongoose connection helper for MongoDB Atlas
     ├── controllers/
-    │   ├── studentController.js
-    │   ├── adminController.js
-    │   └── chefController.js
+    │   ├── adminController.js              ← Logic for user CRUD, global lock, blocks, overrides
+    │   ├── authController.js               ← Logic for login, JWT issuing, password changes
+    │   ├── chefController.js               ← Logic for daily rosters, lunch gating, attendance
+    │   └── studentController.js            ← Logic for student selections & Friday validation
+    ├── middleware/
+    │   └── auth.js                         ← JWT extraction, validation & role authorization
+    ├── models/
+    │   ├── Attendance.js                   ← Mongoose model for daily meal attendance
+    │   ├── MealSelection.js                ← Mongoose model for weekly student lunch preferences
+    │   ├── SystemConfig.js                 ← Mongoose model for global system settings
+    │   └── User.js                         ← Mongoose model for user accounts and credentials
     └── routes/
-        ├── mealRoutes.js       ← /api/meals/*
-        ├── adminRoutes.js      ← /api/admin/*
-        └── chefRoutes.js       ← /api/chef/*
+        ├── adminRoutes.js                  ← /api/admin/* endpoints (Admin authorization)
+        ├── authRoutes.js                   ← /api/auth/* endpoints (Public login, protected auth)
+        ├── chefRoutes.js                   ← /api/chef/* endpoints (Chef & Admin authorization)
+        └── mealRoutes.js                   ← /api/meals/* endpoints (Student selection endpoints)
 ```
 
 ---
 
-## 4. Business Rules & Permissions
+## 5. Database Schemas & Data Retention Rules
 
-### Student
-- Can view the weekly meal schedule (Saturday through Friday).
-- **Breakfast** and **Dinner** are auto-selected and fixed every day — no toggles shown.
-- **Lunch selection is ONLY allowed on Fridays** (day `getDay() === 5`). On all other days, all lunch checkboxes are visually disabled and non-interactive.
-- A `simulateFriday: true` flag in `POST /api/meals/select` body bypasses the Friday restriction in development mode (`NODE_ENV=development`). The Student Dashboard exposes a dev-mode toggle for this.
-- Cannot modify meals once:
-  - The Admin has activated the **Global Lock**, or
-  - The student is individually **Blocked** by the Admin.
-- The student sees real-time warning banners when:
-  - They are blocked (`isBlocked: true`) — shows penalty reason.
-  - They are red-flagged (`isRedFlagged: true`) — shows absence warning.
-  - The global lock is active (`isGlobalLocked: true`).
+Database: **`weekly-meal`** (hosted on MongoDB Atlas).
 
-### Admin (Warden)
-- Can create `student` and `chef` accounts.
-- Can view all users with role filtering.
-- Can **toggle the global lock** (freeze/unfreeze all meal selections for everyone).
-- Can **block or unblock** any individual student's meal privileges with an optional penalty reason.
-- Can **override any student's lunch selection** for any day — even when the global lock is active.
+### 5.1 `users` Collection
+Defined in `meal-server/models/User.js` and managed concurrently by `meal-client/src/app/actions/authActions.ts`.
 
-### Chef (Mess Manager)
-- Views a **daily attendance interface** restricted to today's date.
-- **Breakfast tab**: Shows ALL registered students (all are eligible).
-- **Dinner tab**: Shows ALL registered students (all are eligible).
-- **Lunch tab**: Shows **ONLY** students whose `MealSelection.lunchSelections[today] === true`. Students who did NOT pre-select lunch for that specific day are **completely hidden** from the list.
-- Can mark each student as `present` or `absent` for each meal session.
-- **Red-Flag Logic**:
-  - If a student is marked `absent` for **lunch**, their `isRedFlagged` is set to `true`.
-  - If a student is marked `present` for **any meal**, their `isRedFlagged` is cleared to `false`.
-  - Red-flagged students display a red visual alert badge.
-
-### Week Boundary
-- A "week" starts on **Saturday** and ends on **Friday**.
-- `weekStartDate` is always the ISO date string (YYYY-MM-DD) of the nearest past Saturday.
-- `getCurrentWeekStartDate()` in `studentController.js` computes this from any target date.
-
----
-
-## 5. Backend: `meal-server/`
-
-The backend is **fully implemented and verified**. The server uses Express 5 (ESM modules), Mongoose 9, and MongoDB Atlas.
-
-### 5.1 Database Models
-
-#### `User` (`models/User.js`)
-| Field | Type | Notes |
-|---|---|---|
-| `name` | String | required, trimmed |
-| `email` | String | required, unique, lowercase |
-| `role` | `'student' \| 'admin' \| 'chef'` | required, default `'student'` |
-| `room` | String | optional, for students |
-| `isBlocked` | Boolean | default `false` |
-| `isRedFlagged` | Boolean | default `false` |
-| `penaltyReason` | String | populated when `isBlocked = true` |
-| `createdAt / updatedAt` | Date | auto via `timestamps: true` |
-
-#### `MealSelection` (`models/MealSelection.js`)
-| Field | Type | Notes |
-|---|---|---|
-| `studentId` | ObjectId ref `User` | required |
-| `weekStartDate` | String `YYYY-MM-DD` | required, Saturday of the week |
-| `lunchSelections` | Object | keys: `sat, sun, mon, tue, wed, thu, fri` — Boolean each |
-| `isLocked` | Boolean | default `false` |
-| `createdAt` | Date | TTL index: 365 days |
-
-Unique compound index: `{ studentId, weekStartDate }`.
-
-#### `Attendance` (`models/Attendance.js`)
-| Field | Type | Notes |
-|---|---|---|
-| `studentId` | ObjectId ref `User` | required |
-| `date` | String `YYYY-MM-DD` | required |
-| `mealType` | `'breakfast' \| 'lunch' \| 'dinner'` | required |
-| `status` | `'present' \| 'absent'` | required |
-| `createdAt` | Date | TTL index: 365 days |
-
-Unique compound index: `{ studentId, date, mealType }`.
-
-#### `SystemConfig` (`models/SystemConfig.js`)
-| Field | Type | Notes |
-|---|---|---|
-| `key` | String | always `"global_settings"` |
-| `isGlobalLocked` | Boolean | default `false` |
-
----
-
-### 5.2 API Endpoints Reference
-
-**Base URL:** `http://localhost:5000`
-
-#### Health Check
-```
-GET /
-Response: { status: "online", service: "...", version: "1.0.0", endpoints: {...} }
-```
-
----
-
-#### Student Routes — `/api/meals`
-
-**`GET /api/meals/my-selection`**
-
-Fetch the current student's weekly meal selection + global lock state.
-
-| Query Param | Type | Required | Notes |
-|---|---|---|---|
-| `studentId` | string (ObjectId) | Yes* | Can also be sent as `x-user-id` header |
-| `weekStartDate` | string `YYYY-MM-DD` | No | Defaults to current week's Saturday |
-
-Success Response `200`:
-```json
-{
-  "success": true,
-  "student": {
-    "id": "...",
-    "name": "Ahmed Al-Mansoor",
-    "email": "ahmed@hostel.edu",
-    "room": "A-204",
-    "isBlocked": false,
-    "isRedFlagged": false,
-    "penaltyReason": null
+```javascript
+const userSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true, trim: true },
+    email: { type: String, required: true, unique: true, trim: true, lowercase: true },
+    password: { type: String, required: true },
+    role: { type: String, enum: ["student", "admin", "chef"], default: "student", required: true },
+    room: { type: String, trim: true },             // For students (e.g. "A-204")
+    shift: { type: String, trim: true },            // For chefs (e.g. "Morning & Lunch Session")
+    isBlocked: { type: Boolean, default: false },   // Disciplinary meal suspension state
+    isRedFlagged: { type: Boolean, default: false },// Missed lunch unexcused penalty state
+    penaltyReason: { type: String, trim: true },    // Displayed on student dashboard if blocked
+    isPasswordReset: { type: Boolean, default: true } // Triggers forced password change on first login
   },
-  "isGlobalLocked": false,
-  "isFriday": false,
-  "selection": {
-    "studentId": "...",
-    "weekStartDate": "2025-10-25",
-    "lunchSelections": { "sat": true, "sun": true, "mon": true, "tue": true, "wed": true, "thu": true, "fri": false },
-    "isLocked": false
+  { timestamps: true }
+);
+```
+
+- **Indexes**:
+  - `{ email: 1 }`: Unique index to prevent duplicate accounts.
+  - `{ role: 1 }`: Accelerated querying for student rosters and chef lists.
+
+---
+
+### 5.2 `mealselections` Collection
+Defined in `meal-server/models/MealSelection.js`.
+
+```javascript
+const lunchSelectionsSchema = new mongoose.Schema(
+  {
+    sat: { type: Boolean, default: true },
+    sun: { type: Boolean, default: true },
+    mon: { type: Boolean, default: true },
+    tue: { type: Boolean, default: true },
+    wed: { type: Boolean, default: true },
+    thu: { type: Boolean, default: true },
+    fri: { type: Boolean, default: false },
   },
-  "fixedMeals": {
-    "breakfast": { "fixed": true, "note": "Standard continental breakfast included daily" },
-    "dinner": { "fixed": true, "note": "Standard hot dinner meal included daily" }
+  { _id: false }
+);
+
+const mealSelectionSchema = new mongoose.Schema(
+  {
+    studentId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    weekStartDate: { type: String, required: true, index: true }, // Format: "YYYY-MM-DD" (Saturday)
+    lunchSelections: { type: lunchSelectionsSchema, default: () => ({}) },
+    isLocked: { type: Boolean, default: false },
+    createdAt: { type: Date, default: Date.now, expires: "365d" } // 1-year TTL retention policy
+  },
+  { timestamps: true }
+);
+
+// Compound Unique Constraint: One record per student per calendar week
+mealSelectionSchema.index({ studentId: 1, weekStartDate: 1 }, { unique: true });
+```
+
+- **TTL Expiration Policy**: `expires: "365d"` cleans up stale historic weekly selections after 1 year.
+
+---
+
+### 5.3 `attendances` Collection
+Defined in `meal-server/models/Attendance.js`.
+
+```javascript
+const attendanceSchema = new mongoose.Schema(
+  {
+    studentId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    date: { type: String, required: true, index: true }, // Format: "YYYY-MM-DD"
+    mealType: { type: String, enum: ["breakfast", "lunch", "dinner"], required: true },
+    status: { type: String, enum: ["present", "absent"], required: true },
+    createdAt: { type: Date, default: Date.now, expires: "365d" } // 1-year TTL retention policy
+  },
+  { timestamps: true }
+);
+
+// Compound Unique Constraint: One record per student, per date, per meal session
+attendanceSchema.index({ studentId: 1, date: 1, mealType: 1 }, { unique: true });
+```
+
+---
+
+### 5.4 `systemconfigs` Collection
+Defined in `meal-server/models/SystemConfig.js`.
+
+```javascript
+const systemConfigSchema = new mongoose.Schema(
+  {
+    key: { type: String, required: true, unique: true, default: "global_settings" },
+    isGlobalLocked: { type: Boolean, default: false }
+  },
+  { timestamps: true }
+);
+```
+
+---
+
+### 5.5 `login_attempts` Collection
+Managed by `src/lib/audit.ts` for rate limiting.
+
+| Field Name | Type | Description |
+|---|---|---|
+| `email` | String | Lowercase unique email being attempted (indexed) |
+| `attempts` | Number | Integer counter of consecutive failed attempts |
+| `lastAttempt` | Date | Timestamp of most recent failure |
+| `lockedUntil` | Date | Lockout expiration time (Date.now() + 15 min) |
+
+---
+
+### 5.6 `auditlogs` Collection
+Managed by `src/lib/audit.ts` and `auditActions.ts`.
+
+| Field Name | Type | Description |
+|---|---|---|
+| `action` | String | `CREATE_USER`, `DELETE_USER`, `BLOCK_STUDENT`, etc. |
+| `performedBy` | Object | `{ id, email, role, name }` of the operating administrator |
+| `targetId` | String | MongoDB ObjectId string of target user |
+| `targetEmail` | String | Email address of the target user |
+| `details` | Object | Structured JSON map detailing modified fields |
+| `timestamp` | Date | Explicit ISO execution timestamp |
+
+---
+
+## 6. Complete API Endpoints Reference (`meal-server`)
+
+Base URL: `http://localhost:5000` (or production host domain). All protected endpoints require header `Authorization: Bearer <token>`.
+
+### 6.1 Authentication Routes (`/api/auth`)
+
+#### `POST /api/auth/login`
+- **Access**: Public
+- **Body**: `{ "email": "user@hostel.edu", "password": "password123" }`
+- **Success (200)**:
+  ```json
+  {
+    "success": true,
+    "message": "Login successful",
+    "token": "eyJhbGciOi...",
+    "user": {
+      "id": "67...",
+      "name": "Ahmed Al-Mansoor",
+      "email": "ahmed@hostel.edu",
+      "role": "student",
+      "room": "A-204",
+      "isBlocked": false,
+      "isRedFlagged": false,
+      "penaltyReason": null,
+      "isPasswordReset": false
+    }
   }
-}
-```
+  ```
+
+#### `POST /api/auth/change-password`
+- **Access**: Protected (`verifyToken`)
+- **Body**: `{ "userId": "67...", "currentPassword": "Dorm@1234", "newPassword": "NewSecurePassword!" }`
+- **Success (200)**:
+  ```json
+  { "success": true, "message": "Password updated successfully.", "user": { "id": "...", "isPasswordReset": false } }
+  ```
+
+#### `GET /api/auth/me/:userId`
+- **Access**: Protected (`verifyToken`)
+- **Success (200)**: Returns user profile object without password field.
 
 ---
 
-**`POST /api/meals/select`**
+### 6.2 Student Meal Routes (`/api/meals`)
 
-Save/update the student's weekly lunch selections.
+#### `GET /api/meals/my-selection`
+- **Access**: Protected (`verifyToken`)
+- **Query Params**: `studentId` (required), `weekStartDate` (optional, defaults to current Saturday)
+- **Success (200)**:
+  ```json
+  {
+    "success": true,
+    "student": { "id": "...", "name": "...", "room": "...", "isBlocked": false, "isRedFlagged": false },
+    "isGlobalLocked": false,
+    "isFriday": true,
+    "selection": {
+      "studentId": "...",
+      "weekStartDate": "2026-10-24",
+      "lunchSelections": { "sat": true, "sun": true, "mon": true, "tue": true, "wed": true, "thu": true, "fri": false },
+      "isLocked": false
+    },
+    "fixedMeals": {
+      "breakfast": { "fixed": true, "note": "Standard continental breakfast included daily" },
+      "dinner": { "fixed": true, "note": "Standard hot dinner meal included daily" }
+    }
+  }
+  ```
 
-Request Body:
-```json
-{
-  "studentId": "...",
-  "weekStartDate": "2025-10-25",
-  "lunchSelections": { "sat": true, "sun": false, "mon": true, "tue": true, "wed": false, "thu": true, "fri": false },
-  "simulateFriday": true
-}
-```
-
-- Validates the user is not blocked.
-- Validates the global lock is not active.
-- Validates it is Friday (or `simulateFriday: true` in `NODE_ENV=development`).
-
-Error codes: `400` (not Friday / missing fields), `403` (blocked or globally locked), `404` (student not found), `500`.
-
----
-
-#### Admin Routes — `/api/admin`
-
-**`POST /api/admin/toggle-global-lock`**
-
-Toggle or explicitly set the global meal selection lock.
-
-Request Body (all optional):
-```json
-{ "isLocked": true }
-```
-If `isLocked` is omitted, the lock is toggled. If `isLocked` is `true`/`false`, it is set explicitly.
-
-Success Response `200`:
-```json
-{
-  "success": true,
-  "isGlobalLocked": true,
-  "message": "Global selection lock is now ACTIVATED (Locked)."
-}
-```
+#### `POST /api/meals/select`
+- **Access**: Protected (`verifyToken`)
+- **Body**:
+  ```json
+  {
+    "studentId": "67...",
+    "weekStartDate": "2026-10-24",
+    "lunchSelections": { "sat": true, "sun": false, "mon": true, "tue": true, "wed": false, "thu": true, "fri": false },
+    "simulateFriday": true
+  }
+  ```
+- **Constraints Enforced**:
+  - Returns `403` if student `isBlocked`.
+  - Returns `403` if `isGlobalLocked` is active.
+  - Returns `400` if not Friday (unless `simulateFriday: true` in `development` mode).
 
 ---
 
-**`POST /api/admin/toggle-block`**
+### 6.3 Admin Routes (`/api/admin`)
+All routes require `verifyToken` AND `requireRole("admin")`.
 
-Block or unblock a specific student's meal privileges.
+#### `POST /api/admin/toggle-global-lock`
+- **Body**: `{ "isLocked": true }` (optional boolean; toggles if omitted)
+- **Success (200)**: `{ "success": true, "isGlobalLocked": true, "message": "Global selection lock is now ACTIVATED (Locked)." }`
 
-Request Body:
-```json
-{
-  "studentId": "...",
-  "isBlocked": true,
-  "reason": "Disciplinary notice — noise violation"
-}
-```
-- `isBlocked`: Optional boolean. If omitted, the current value is toggled.
-- `reason`: Optional string. Applied as `penaltyReason` when blocking. Cleared when unblocking.
+#### `POST /api/admin/toggle-block`
+- **Body**: `{ "studentId": "67...", "isBlocked": true, "reason": "Late arrival & kitchen violation" }`
+- **Success (200)**: Updates student record and sets/clears `penaltyReason`.
 
-Success Response `200`:
-```json
-{
-  "success": true,
-  "message": "Student meal privileges BLOCKED.",
-  "student": { "id": "...", "name": "...", "isBlocked": true, "penaltyReason": "..." }
-}
-```
+#### `POST /api/admin/override-meal`
+- **Body**:
+  ```json
+  {
+    "studentId": "67...",
+    "weekStartDate": "2026-10-24",
+    "day": "mon",
+    "selected": true
+  }
+  ```
+  *(Or full week by passing `lunchSelections` object)*.
 
----
+#### `GET /api/admin/users`
+- **Query Params**: `role` (optional: `student` | `admin` | `chef`)
+- **Success (200)**: `{ "success": true, "count": 12, "users": [...] }`
 
-**`POST /api/admin/override-meal`**
+#### `POST /api/admin/users`
+- **Body**: `{ "name": "Zaid Mostafa", "email": "zaid@hostel.edu", "role": "student", "room": "B-302" }`
+- **Success (201)**: Creates user with hashed `Dorm@1234` password and seeds initial `MealSelection`.
 
-Manually override a student's lunch selection for any day (bypasses all locks).
+#### `POST /api/admin/reset-password`
+- **Body**: `{ "userId": "67..." }`
+- **Success (200)**: Re-hashes password to `Dorm@1234` and sets `isPasswordReset: true`.
 
-Request Body (two modes):
-
-*Mode 1 — single day override:*
-```json
-{
-  "studentId": "...",
-  "weekStartDate": "2025-10-25",
-  "day": "mon",
-  "selected": false
-}
-```
-*Mode 2 — full week override:*
-```json
-{
-  "studentId": "...",
-  "weekStartDate": "2025-10-25",
-  "lunchSelections": { "sat": true, "sun": true, "mon": false, "tue": true, "wed": true, "thu": false, "fri": false }
-}
-```
+#### `DELETE /api/admin/users/:id`
+- **Success (200)**: Deletes user record and cascades deletion over `MealSelection` and `Attendance` collections.
 
 ---
 
-**`GET /api/admin/users`**
+### 6.4 Chef Attendance Routes (`/api/chef`)
+All routes require `verifyToken` AND `requireRole("chef", "admin")`.
 
-Fetch all users, optionally filtered by role.
+#### `GET /api/chef/today-list`
+- **Query Params**:
+  - `mealType`: `breakfast` | `lunch` | `dinner` (default: `lunch`)
+  - `date`: `YYYY-MM-DD` (default: today)
+  - `day`: `sat` | `sun` | `mon` | `tue` | `wed` | `thu` | `fri` (default: today)
+- **Logic**:
+  - For `breakfast` and `dinner`: Returns all non-blocked students.
+  - For `lunch`: Queries `mealselections` for the current week and **only returns students whose `lunchSelections[day] === true`**.
+- **Success (200)**:
+  ```json
+  {
+    "success": true,
+    "date": "2026-10-26",
+    "day": "mon",
+    "mealType": "lunch",
+    "totalEligible": 4,
+    "students": [
+      {
+        "id": "67...",
+        "name": "Ahmed Al-Mansoor",
+        "room": "A-204",
+        "email": "ahmed@hostel.edu",
+        "isBlocked": false,
+        "isRedFlagged": false,
+        "mealType": "lunch",
+        "preSelected": true,
+        "attendanceStatus": "unmarked"
+      }
+    ]
+  }
+  ```
 
-| Query Param | Type | Notes |
-|---|---|---|
-| `role` | `'student' \| 'admin' \| 'chef'` | Optional filter |
-
-Success Response `200`:
-```json
-{
-  "success": true,
-  "count": 4,
-  "users": [ { "_id": "...", "name": "...", "email": "...", "role": "...", "isBlocked": false, ... } ]
-}
-```
-
----
-
-**`POST /api/admin/users`**
-
-Create a new student or chef account.
-
-Request Body:
-```json
-{
-  "name": "New Student",
-  "email": "newstudent@hostel.edu",
-  "role": "student",
-  "room": "D-405"
-}
-```
-- `name` and `email` are required.
-- `role` defaults to `"student"` if omitted.
-- Returns `400` if the email already exists.
-
----
-
-#### Chef Routes — `/api/chef`
-
-**`GET /api/chef/today-list`**
-
-Fetch the attendance list for today's meal session.
-
-| Query Param | Type | Notes |
-|---|---|---|
-| `mealType` | `'breakfast' \| 'lunch' \| 'dinner'` | Defaults to `'lunch'` |
-| `date` | string `YYYY-MM-DD` | Defaults to today |
-| `day` | `'sat' \| 'sun' \| 'mon' \| 'tue' \| 'wed' \| 'thu' \| 'fri'` | Defaults to today's day key |
-
-- For `breakfast`/`dinner`: returns ALL students.
-- For `lunch`: returns ONLY students with `lunchSelections[day] === true`.
-
-Student record in response:
-```json
-{
-  "id": "...",
-  "name": "Ahmed Al-Mansoor",
-  "room": "A-204",
-  "email": "ahmed@hostel.edu",
-  "isBlocked": false,
-  "isRedFlagged": false,
-  "mealType": "lunch",
-  "preSelected": true,
-  "attendanceStatus": "unmarked"
-}
-```
-`attendanceStatus` is `"present"`, `"absent"`, or `"unmarked"`.
+#### `POST /api/chef/check-in`
+- **Body**: `{ "studentId": "67...", "date": "2026-10-26", "mealType": "lunch", "status": "absent" }`
+- **Red-Flag Logic**:
+  - `mealType === "lunch"` and `status === "absent"`: Sets `User.isRedFlagged = true`.
+  - `mealType === "lunch"` and `status === "present"`: Sets `User.isRedFlagged = false`.
+  - Any meal session with `status === "present"`: Clears existing `isRedFlagged` to `false`.
 
 ---
 
-**`POST /api/chef/check-in`**
+## 7. Client State Architecture & Providers
 
-Record or update a student's meal attendance.
-
-Request Body:
-```json
-{
-  "studentId": "...",
-  "date": "2025-10-27",
-  "mealType": "lunch",
-  "status": "absent"
-}
+Mounted in `src/app/providers.tsx` in strict sequence:
+```tsx
+<ThemeProvider>
+  <LanguageProvider>
+    <MealAppProvider>
+      {children}
+    </MealAppProvider>
+  </LanguageProvider>
+</ThemeProvider>
 ```
-- `date` defaults to today if omitted.
-- `studentId`, `mealType`, and `status` are required.
-- **Red-Flag Logic** (lunch only):
-  - `status: "absent"` → `student.isRedFlagged = true`
-  - `status: "present"` → `student.isRedFlagged = false`
-- For non-lunch meals: if `status: "present"` and student is red-flagged, the flag is cleared.
+
+### 7.1 `ThemeProvider` (`src/context/ThemeContext.tsx`)
+- Manages `"light"` and `"dark"` themes.
+- Initializes state safely from `localStorage.getItem("meal_theme")` or system preference (`prefers-color-scheme`).
+- Sets `data-theme` and updates CSS class `dark` on `document.documentElement`.
+
+### 7.2 `LanguageProvider` (`src/context/LanguageContext.tsx`)
+- Supports English (`"en"`) and Arabic (`"ar"`).
+- Contains full bidirectional dictionary (`translations`).
+- Sets `document.documentElement.dir = "rtl"` and `lang = "ar"` when Arabic is active.
+- Exposes `t(key)` helper for UI string localization.
+
+### 7.3 `MealAppContext` (`src/context/MealAppContext.tsx`)
+- **Central State Hub**:
+  - Manages `currentUser`, `currentRole`, `isGlobalLocked`, `students`, `chefs`, and `studentSchedule`.
+  - Executes optimistic UI updates for instant interaction feedback while running asynchronous Server Actions.
+  - Automatically fetches updated student data upon login.
+  - Exposes actions: `toggleStudentLunch`, `toggleGlobalLock`, `toggleStudentPenalty`, `adminOverrideStudentLunch`, `markChefLunchStatus`, `markChefBreakfast`, `markChefDinner`, `addNewStudent`, `addNewChef`, `deleteStudent`, `deleteChef`, `adminResetPassword`.
 
 ---
 
-### 5.3 Running the Backend
+## 8. Multi-Environment Configuration & Variables
 
-```powershell
-cd meal-server
-npm run dev        # node --watch index.js (auto-restarts on file changes)
-# or
-npm start          # node index.js (production)
-```
+### 8.1 `meal-client/.env`
+```ini
+# Secret used by jose to sign and verify session JWT cookies
+JWT_SECRET=super_secret_hostel_meal_jwt_key_2026_production_safe
 
-Server starts on port `5000` by default (configurable via `PORT` env var).
+# MongoDB Atlas connection string for Direct Server Actions
+DB_URL=mongodb://weekly-meal:VpQhmt1QqG0mU55K@ac-vwgi4dy-shard-00-00.yleslu4.mongodb.net:27017,ac-vwgi4dy-shard-00-01.yleslu4.mongodb.net:27017,ac-vwgi4dy-shard-00-02.yleslu4.mongodb.net:27017/?ssl=true&replicaSet=atlas-ydwn0o-shard-0&authSource=admin
 
----
-
-## 6. Frontend: `meal-client/`
-
-The frontend is **fully implemented and build-verified**. All pages have complete logic — no stubs.
-
-### 6.1 Context Providers
-
-All providers are mounted in `src/app/providers.tsx` in this order:
-```
-ThemeProvider > LanguageProvider > MealAppProvider
-```
-
-| Context | File | Purpose |
-|---|---|---|
-| `ThemeContext` | `src/context/ThemeContext.tsx` | light/dark toggle, persists to `localStorage`, sets `data-theme` attribute on `<html>` |
-| `LanguageContext` | `src/context/LanguageContext.tsx` | English/Arabic toggle, sets `dir="rtl"` on `<html>` when Arabic is active; full translation dictionary |
-| `MealAppContext` | `src/context/MealAppContext.tsx` | Role state, all API calls with optimistic updates, rich local mock data fallback when backend is offline, `backendOnline` status indicator |
-
-`MealAppContext` contains `PREDEFINED_ACCOUNTS` — placeholder ObjectId strings for Student, Admin, and Chef roles used during local development. **After seeding MongoDB, replace these with the actual `_id` values returned by the seed script.**
-
-### 6.2 Pages & Routes
-
-| Route | File | Role | Description |
-|---|---|---|---|
-| `/` | `src/app/page.tsx` | Public | Landing page with feature cards and backend status pills |
-| `/login` | `src/app/login/page.tsx` | Public | Role-selector tabs (Student / Admin / Chef) → redirects to role dashboard |
-| `/dashboard/student` | `src/app/dashboard/student/page.tsx` | Student | 7-day meal grid, Friday-only checkbox enforcement, warning banners (blocked/red-flag/global lock), simulate-Friday dev toggle |
-| `/dashboard/admin` | `src/app/dashboard/admin/page.tsx` | Admin | Global lock toggle, student roster with block/unblock modals, penalty note inputs, manual meal overrides, user creation form, metrics cards |
-| `/dashboard/chef` | `src/app/dashboard/chef/page.tsx` | Chef | Breakfast/Lunch/Dinner tabs, strict lunch pre-selection filter, mark present/absent, red-flag badge indicators, stats cards |
-
-### 6.3 Components
-
-| Component | File | Notes |
-|---|---|---|
-| `Navbar` | `src/components/Navbar.tsx` | Sticky, role-isolated navigation links; language toggle; theme toggle; sign-out |
-| `Footer` | `src/components/Footer.tsx` | Static footer |
-
-### 6.4 API Client (`src/lib/api.ts`)
-
-Base URL: `process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"`
-
-All functions are fully typed with TypeScript. Exported functions:
-
-**Student:**
-- `getMySelection(studentId: string, weekStartDate?: string)`
-- `selectLunch(payload: { studentId: string; weekStartDate: string; lunchSelections: Record<string, boolean>; simulateFriday?: boolean })`
-
-**Admin:**
-- `toggleGlobalLock(isLocked?: boolean)`
-- `toggleBlockStudent(payload: { studentId: string; isBlocked: boolean; reason?: string })`
-- `overrideStudentMeal(payload: { studentId: string; weekStartDate?: string; day?: string; selected?: boolean; lunchSelections?: Record<string, boolean> })`
-- `getUsers(role?: string)`
-- `createUser(payload: { name: string; email: string; role: string; room?: string })`
-
-**Chef:**
-- `getTodayList(mealType: string, date?: string, day?: string)`
-- `checkInStudent(payload: { studentId: string; date?: string; mealType: string; status: 'present' | 'absent' })`
-
-### 6.5 Running the Frontend
-
-> **⚠️ CRITICAL — ALWAYS use `--webpack` flag.** Turbopack causes a fatal crash with DaisyUI CSS imports. The `package.json` scripts already include this flag — never remove it.
-
-```powershell
-cd meal-client
-npm run dev        # next dev --webpack  (development, port 3000)
-npm run build      # next build --webpack (production build)
-npm start          # next start (production server)
-```
-
----
-
-## 7. Environment Variables
-
-### `meal-client/.env`
-```
+# Base URL for Express Backend REST services
 NEXT_PUBLIC_API_URL=http://localhost:5000/api
 ```
 
-### `meal-server/.env`
-```
-MONGODB_URI=mongodb+srv://<user>:<pass>@<cluster>.mongodb.net/<dbname>?retryWrites=true&w=majority
+### 8.2 `meal-server/.env`
+```ini
+# Port for Express API server
 PORT=5000
+
+# MongoDB Atlas credentials and connection string
+DB_USER=weekly-meal
+DB_PASS=VpQhmt1QqG0mU55K
+MONGODB_URI=mongodb://weekly-meal:VpQhmt1QqG0mU55K@ac-vwgi4dy-shard-00-00.yleslu4.mongodb.net:27017,ac-vwgi4dy-shard-00-01.yleslu4.mongodb.net:27017,ac-vwgi4dy-shard-00-02.yleslu4.mongodb.net:27017/?ssl=true&replicaSet=atlas-ydwn0o-shard-0&authSource=admin
+
+# JWT signing secret matching meal-client
+JWT_SECRET=super_secret_hostel_meal_jwt_key_2026_production_safe
+
+# Setting to development enables simulateFriday bypass for meal selections
 NODE_ENV=development
 ```
-> `NODE_ENV=development` enables the `simulateFriday` bypass in `POST /api/meals/select`.
 
 ---
 
-## 8. Critical Known Issues & Constraints
+## 9. Local Development & Deployment Runbook
 
-| Issue | Root Cause | Solution / Status |
-|---|---|---|
-| **Turbopack crash** | DaisyUI CSS import causes a Webpack-style panic in Turbopack | Always pass `--webpack` to `next dev` and `next build`. Already baked into `package.json`. **Never remove.** |
-| **DaisyUI v5 import style** | `@plugin "daisyui"` (PostCSS plugin syntax) causes Turbopack crash | Use CSS import style in `globals.css`: `@import "daisyui/daisyui.css"; @import "daisyui/themes.css";` |
-| **Google Fonts removed** | `next/font/google` fetches from `fonts.googleapis.com` at build time (fails offline) | Removed from `layout.tsx`. Use system fonts or self-host. |
-| **Case-sensitive folder** | Windows git treats `Components/` and `components/` as the same; Linux/CI does not | Folder is correctly named `components/` (lowercase). Do NOT rename it back. |
-| **`PREDEFINED_ACCOUNTS` IDs** | Placeholder ObjectIds in `MealAppContext.tsx` don't match seeded MongoDB `_id` values | After running `npm run seed`, fetch real IDs and update the constant. |
-| **`isPenalized` vs `isBlocked`** | Early context used `isPenalized`; backend model uses `isBlocked` | All context files and pages now consistently use `isBlocked`. |
+### 9.1 Local Development Setup
 
----
-
-## 9. Seeding the Database
-
-Run once after the backend is started and connected to MongoDB Atlas:
-
+#### Step 1: Install Dependencies
 ```powershell
-cd meal-server
+# In meal-server
+cd c:\Developer\My-projects\Fullstack\weekly-meal\meal-server
+npm install
+
+# In meal-client
+cd c:\Developer\My-projects\Fullstack\weekly-meal\meal-client
+npm install
+```
+
+#### Step 2: Seed the Database
+```powershell
+cd c:\Developer\My-projects\Fullstack\weekly-meal\meal-server
 npm run seed
 ```
+*Creates the primary Warden account (`warden@hostel.edu` / `Dorm@1234`) and initializes `SystemConfig` with `isGlobalLocked: false`.*
 
-This creates:
-- 4 students: Ahmed Al-Mansoor (A-204), Omar Tariq (B-108, **blocked**), Khalid Bin Ziyad (C-301), Zaid Mostafa (A-102)
-- 1 admin: Dr. Ibrahim (Hostel Warden)
-- 1 chef: Chef Mahmoud Hassan
-- A `MealSelection` record for each student for the current week (Khalid does NOT have Monday lunch selected — use this to test strict lunch filtering in the Chef dashboard)
-- A `SystemConfig` record with `isGlobalLocked: false`
-
-After seeding, retrieve the ObjectIds to update `PREDEFINED_ACCOUNTS` in `MealAppContext.tsx`:
+#### Step 3: Run Both Services
+Open two terminal windows:
 ```powershell
-# In the meal-server directory, start a quick node REPL or run:
-# (connect to Atlas and query: db.users.find({}, { name: 1, role: 1 }))
-```
-
----
-
-## 10. Full Local Development Setup
-
-Run both servers simultaneously in two separate terminals:
-
-```powershell
-# Terminal 1 — Backend
+# Terminal 1 — Backend Express Service
 cd c:\Developer\My-projects\Fullstack\weekly-meal\meal-server
 npm run dev
-# Server: http://localhost:5000
+# Running at: http://localhost:5000
 
-# Terminal 2 — Frontend
+# Terminal 2 — Frontend Next.js Client
 cd c:\Developer\My-projects\Fullstack\weekly-meal\meal-client
 npm run dev
-# App: http://localhost:3000
+# Running at: http://localhost:3000
 ```
 
-First-time setup (once):
+---
+
+### 9.2 Production Build & Verification
+Always execute the production build using Webpack:
 ```powershell
-# Install backend dependencies
-cd meal-server
-npm install
-
-# Install frontend dependencies
-cd ..\meal-client
-npm install
-
-# Seed the database (backend must be running and connected)
-cd ..\meal-server
-npm run seed
+cd c:\Developer\My-projects\Fullstack\weekly-meal\meal-client
+npm run lint
+npm run build
 ```
+- Expected output: 0 lint errors, all routes statically/dynamically compiled successfully.
 
 ---
 
-## 11. Localization & Styling Rules
+### 9.3 Cloud Deployment Instructions
 
-- **UI Languages:** English (default) and Arabic (`dir="rtl"`).
-- When Arabic is selected, `LanguageContext` sets `document.documentElement.dir = "rtl"` and `document.documentElement.lang = "ar"`.
-- All UI-facing strings must use the translation dictionary in `LanguageContext.tsx`. Add new keys there first.
-- **Backend code, database field names, API params, and variable names must always be in English.** Only UI text uses Arabic translations.
-- Theme: Light (default) and Dark mode via DaisyUI `data-theme` attribute on `<html>`. Theme is persisted to `localStorage`.
-- Responsive design: All pages are fully responsive — mobile, tablet, desktop — using Tailwind CSS utility classes and DaisyUI components.
+1. **Frontend (`meal-client`) on Vercel**:
+   - Root Directory: `meal-client`
+   - Framework Preset: Next.js
+   - Build Command: `next build --webpack`
+   - Environment Variables:
+     - `JWT_SECRET`: (Production secret string)
+     - `DB_URL`: (MongoDB Atlas URI)
+     - `NEXT_PUBLIC_API_URL`: `https://your-api-domain.com/api`
 
----
-
-## 12. Tasks & Milestones Tracking
-
-- [x] **Remove hardcoded mock data**: Fully migrated to real MongoDB Atlas database operations via Next.js Server Actions.
-- [x] **Unified Login System**: Single login for Admin, Chef, and Student with bcrypt verification and dynamic routing.
-- [x] **Password Reset & Change Architecture**:
-  - Auto-generated default password `Dorm@1234` with `isPasswordReset: true` on user creation.
-  - Admin single-click password reset action to restore default password.
-  - Self-service password change via `updatePasswordAction` with bcrypt hashing and `isPasswordReset: false` status update.
-- [x] **Route Protection (Middleware)**: Edge-wide route guard in `src/middleware.ts` using secure `meal_session` cookies to protect `/dashboard/*` routes and isolate roles.
-- [x] **Production Gating**: Strictly disabled `simulateFriday` in production builds (`NODE_ENV === "production"`), locking selection to the real calendar Friday (`getDay() === 5`).
-- [x] **UI/UX Modernization**: Redesigned dashboards, modals, statistics cards, and responsive layouts with DaisyUI and Tailwind CSS.
-- [x] **Audit Logs & Recovery**: Implemented `auditlogs` collection logging critical administrative operations (student block/unblock, meal overrides, user creation/deletion, password resets, global lock toggling).
-- [x] **Rate Limiting & Brute Force Protection**: Implemented database-backed attempt tracking in `login_attempts` with automatic 15-minute account lockouts after 5 consecutive failed attempts.
-- [ ] **HTTPS & Deployment Setup**: Production domain configuration, SSL, and containerized/Vercel deployment setup.
-
-
-
-# Hostel Dining System - Project Status & Roadmap (Agent Context)
-
-## What Is Already Production-Ready
-
-### 1. Architecture & Database Integration
-- Direct connection to MongoDB Atlas via native client connection caching in Next.js Server Actions.
-- Clean, secure password hashing with `bcryptjs` (salt rounds = 10).
-- TTL indexes configured for 365-day automated data retention.
-
-### 2. Business Rules & Workflows
-- Unified role-agnostic login that dynamically routes users to `/dashboard/admin`, `/dashboard/chef`, or `/dashboard/student`.
-- Admin user management: creation with default password (`Dorm@1234`), password reset capability, meal overrides, and global lock toggle.
-- Student Friday-only lunch selection constraints with real-time disciplinary block/red-flag banners.
-- Chef daily attendance module strictly filtering students who pre-selected lunch.
-
-### 3. Build & Type Health
-- Passes `next build --webpack` with zero TypeScript or bundling errors.
+2. **Backend (`meal-server`) on Render / Railway / Docker**:
+   - Root Directory: `meal-server`
+   - Build Command: `npm install`
+   - Start Command: `node index.js`
+   - Environment Variables:
+     - `PORT`: `5000`
+     - `MONGODB_URI`: (MongoDB Atlas URI)
+     - `JWT_SECRET`: (Matching production secret string)
+     - `NODE_ENV`: `production`
 
 ---
 
-## Critical Gaps Before Serving Real Users
+## 10. Strict Technical Constraints & Known Pitfalls
 
-| Area | Current State | Requirement for Real Production |
-| :--- | :--- | :--- |
-| **Route Protection (Middleware)** | ✅ **COMPLETED**: Implemented `src/middleware.ts` using httpOnly session cookies (`meal_session`). Edge guards protect `/dashboard/*` with role enforcement, and redirect unauthenticated users to `/login`. | Fully active and verified in build. |
-| **Friday Simulation Toggle** | ✅ **COMPLETED**: The dev simulator button in Student Dashboard and context toggle logic are strictly gated behind `process.env.NODE_ENV !== "production"`. In production, only the real Friday calendar day (`getDay() === 5`) allows meal selection. | Fully active and verified in build. |
-| **Password Change & Reset** | ✅ **COMPLETED**: Implemented `updatePasswordAction` Server Action with `bcryptjs` hashing, MongoDB user update, and `isPasswordReset: false` flip. Admin reset resets to hashed `Dorm@1234` with `isPasswordReset: true`. | Fully active and verified in build. |
-| **Audit Logs & Recovery** | ✅ **COMPLETED**: `auditlogs` collection records administrative actions (student blocks/unblocks, meal overrides, password resets, user creations and deletions) with actor metadata. | Fully active in MongoDB Server Actions. |
-| **Rate Limiting & Brute Force** | ✅ **COMPLETED**: Implemented rate limiting in `src/lib/audit.ts` and `loginAction`. Locks out accounts after 5 failed attempts for 15 minutes with dynamic attempt warning counts. | Fully active in authentication flow. |
-| **HTTPS & Production Env** | Running locally with `localhost` URLs. | Configure custom domain, SSL, production environment variables (`NEXT_PUBLIC_APP_URL`, production DB URI with restricted IP whitelist), and deployment host (Vercel, AWS, or Docker). |
-
----
-
-## Recommended Next Steps to Launch
-1. [x] **Add `middleware.ts`**: Protected `/dashboard/*` routes so unauthorized users are kicked back to `/login` immediately before rendering.
-2. [x] **Gate Dev Toggles**: Wrapped `toggleFridaySimulation` in `process.env.NODE_ENV !== "production"`.
-3. [x] **Fix Password Change**: Wired direct MongoDB Server Action with bcryptjs and session cookie synchronization.
-4. [x] **Audit Logs & Rate Limiting**: Implemented MongoDB-backed audit logging for admin actions and rate limiting for login attempts.
-
-### Recent Session Execution Report (Completed)
-- **Password Management**: Implemented `updatePasswordAction` in `src/app/actions/authActions.ts`, updated `PasswordChangeModal.tsx` with one-click autofill for default credentials, show/hide eye toggle, validation, and database password reset flag updates.
-- **Middleware & Session Cookies**: Implemented `src/middleware.ts` validating `meal_session` cookies. Restricts unauthorized access to dashboards and enforces role segregation at the edge.
-- **Production Guardrails**: Friday simulation toggle hidden in production UI and locked in context.
-- **Build Status**: Verified via `next build --webpack` - passed with zero TypeScript and bundle errors.
-
----
-
-## Production Security & Architecture Hardening Report (Latest Milestone)
-
-### 1. Dual-Sided JWT Security & Authorization
-- **Server-Side (`meal-server`)**:
-  - Implemented `middleware/auth.js` with `generateToken`, `verifyToken`, and `requireRole` guard middlewares using `jsonwebtoken`.
-  - Configured `authController.js` to issue signed JWT tokens containing `{ id, email, role, name }` with a 7-day expiration upon successful authentication.
-  - Secured all API route groups with token verification:
-    - `POST /api/auth/change-password` & `GET /api/auth/me/:userId` require valid JWT.
-    - `/api/meals/*` strictly requires authenticated token.
-    - `/api/admin/*` strictly requires authenticated JWT with `role === "admin"`.
-    - `/api/chef/*` strictly requires authenticated JWT with `role === "chef" || role === "admin"`.
-  - Added centralized 404 and global error handling middlewares in `meal-server/index.js`.
-- **Client-Side (`meal-client`)**:
-  - Replaced legacy broken Better-Auth stubs with edge-compatible `src/lib/auth.ts` powered by `jose` (`SignJWT` & `jwtVerify`).
-  - Hardened `src/middleware.ts` to cryptographically verify the JWT session cookie (`meal_session`), completely preventing client-side cookie forgery or tampering.
-  - Updated `src/lib/api.ts` to automatically attach `Authorization: Bearer <token>` to all Express API calls.
-
-### 2. Type Safety & Zero `any` Audit
-- Scanned and eliminated **all** occurrences of `any` types throughout `meal-client/src`:
-  - `UserListItem`, `StudentSelectionResult`, `WeeklySelectionData`, `FormattedAuditLog`, `AuditLogActor`, and `ChefStudentItem` are strictly typed.
-  - Replaced all untyped catch blocks `catch (err: any)` with typed `catch (err: unknown)` accompanied by safe `err instanceof Error` assertions.
-  - Verified 0 instances of `: any`, `<any>`, or `as any` across all client source code.
-
-### 3. Component Reusability & DRY Refactoring
-- Created dedicated reusable UI primitives in `src/components/ui/`:
-  - `StatCard.tsx`: Standardized metric cards across Admin and Chef dashboards.
-  - `AlertBanner.tsx`: Reusable alert banners with DaisyUI type variants and dismiss controls.
-  - `DatabaseStatusBadge.tsx`: Reusable MongoDB Atlas status indicator pill.
-- Refactored `StudentDashboard`, `ChefDashboard`, and `AdminDashboard` to leverage these shared components, reducing duplicate HTML boilerplate by over 120 lines.
-- Resolved all React 19 / React Compiler ESLint rules:
-  - Eliminated cascading state updates in `LanguageContext.tsx` and `ThemeContext.tsx` via lazy `useState` initializers.
-  - Synchronized DOM attributes (`data-theme`, `dir`, `lang`) safely in `useEffect`.
-  - Removed all unused icon and variable imports.
-
-### 4. Build & Production Verification
-- **ESLint**: Passed with 0 errors and 0 warnings (`npm run lint`).
-- **Next.js Production Build**: Passed with 0 errors (`next build --webpack`).
-- **Express Backend**: Verified syntax and startup cleanly.
+1. **Webpack Flag Mandatory (`--webpack`)**:
+   - Next.js 16 default Turbopack compiler crashes when encountering DaisyUI v5 CSS imports.
+   - The `--webpack` flag is pre-configured in `meal-client/package.json` (`next dev --webpack` and `next build --webpack`). **Never remove the `--webpack` flag.**
+2. **DaisyUI v5 Import Syntax**:
+   - Do NOT use the PostCSS plugin syntax `@plugin "daisyui"`.
+   - In `globals.css`, styles must be imported explicitly via:
+     ```css
+     @import "tailwindcss";
+     @import "daisyui/daisyui.css";
+     @import "daisyui/themes.css";
+     ```
+3. **No Google Font Imports**:
+   - `next/font/google` builds fail in offline/sandboxed development environments. Standard native system font fallbacks are enforced in `layout.tsx` and `globals.css`.
+4. **Directory Case Sensitivity**:
+   - The components directory is strictly lowercase: `src/components/`. Never rename it with an uppercase `C`.
+5. **No Any Types Allowed**:
+   - Both client and server codebases enforce strict TypeScript standards without `any` casts. All server actions, API responses, and database projections are strictly typed.
+6. **English Database & API Standards**:
+   - All database field names, API parameters, and backend logic must remain in English. Arabic localization is handled exclusively in the UI translation dictionary (`LanguageContext.tsx`).
