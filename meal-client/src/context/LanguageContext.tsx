@@ -73,9 +73,8 @@ export const translations = {
     en: "Meal choices can only be submitted or modified on FRIDAYS. On all other days, choices are frozen.", 
     ar: "تحديد الوجبات وتعديلها متاح أيام الجمعة فقط. في بقية الأيام يكون الجدول مقفلاً." 
   },
-  fridayOpenBadge: { en: "SELECTION OPEN TODAY (FRIDAY)", ar: "نافذة الاختيار مفتوحة اليوم (الجمعة)" },
-  fridayClosedBadge: { en: "Selection Locked (Opens Next Friday)", ar: "الاختيار مغلق (يفتح الجمعة القادمة)" },
-  simulateFridayToggle: { en: "Simulate Friday Selection Window", ar: "محاكاة فتح الاختيار (ليوم الجمعة)" },
+  fridayOpenBadge: { en: "SELECTION OPEN (FRIDAY)", ar: "نافذة الاختيار مفتوحة (الجمعة)" },
+  fridayClosedBadge: { en: "Selection Locked (Fridays Only)", ar: "مغلق (أيام الجمعة فقط)" },
   fixedNotice: { en: "Fixed & Included Daily", ar: "ثابت ومضمن يومياً" },
   selectLunchLabel: { en: "Opt-in for Lunch Meal", ar: "حجز وجبة الغداء لهذا اليوم" },
   unselectLunchLabel: { en: "Opted-out (No Lunch Meal)", ar: "غير محجوز (بدون غداء)" },

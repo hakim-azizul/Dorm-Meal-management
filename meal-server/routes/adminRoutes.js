@@ -7,6 +7,7 @@ import {
   createUser,
   resetUserPassword,
   deleteUser,
+  getWeeklyReport,
 } from "../controllers/adminController.js";
 import { verifyToken, requireRole } from "../middleware/auth.js";
 

@@ -1,33 +1,25 @@
 "use client";
 
 import React, { useState } from "react";
-import { useLanguage } from "@/context/LanguageContext";
 import { useMealApp, StudentRecord, DayKey } from "@/context/MealAppContext";
-import { StatCard } from "@/components/ui/StatCard";
+import { DashboardSidebar } from "@/components/DashboardSidebar";
 import { AlertBanner } from "@/components/ui/AlertBanner";
-import { DatabaseStatusBadge } from "@/components/ui/DatabaseStatusBadge";
 import {
-  ShieldCheck,
-  Lock,
-  Unlock,
   Users,
   ChefHat,
   Search,
   UserPlus,
-  CheckCircle2,
   AlertTriangle,
-  Calendar,
   X,
   ShieldAlert,
   Trash2,
   KeyRound,
-  RotateCcw,
+  Lock,
 } from "lucide-react";
 
 const DAYS: DayKey[] = ["sat", "sun", "mon", "tue", "wed", "thu", "fri"];
 
 export default function AdminDashboard() {
-  const { t } = useLanguage();
   const {
     isGlobalLocked,
     toggleGlobalLock,
@@ -41,12 +33,17 @@ export default function AdminDashboard() {
     deleteChef,
     adminResetPassword,
     isHydrated,
+    isSidebarOpen,
+    closeSidebar,
   } = useMealApp();
 
   const [activeTab, setActiveTab] = useState<"students" | "chefs">("students");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "penalized" | "redflags" | "active">("all");
   const [notification, setNotification] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Selected student for quick focus from sidebar
+  const [selectedStudentId, setSelectedStudentId] = useState<string | undefined>(undefined);
 
   // Punishment Modal
   const [selectedStudentForBlock, setSelectedStudentForBlock] = useState<StudentRecord | null>(null);
@@ -67,7 +64,15 @@ export default function AdminDashboard() {
   // Reset Password Confirmation Modal
   const [userToReset, setUserToReset] = useState<{ id: string; name: string; role: string } | null>(null);
 
-  // Filtering
+  // Quick select student from sidebar
+  const handleSelectStudentFromSidebar = (stu: StudentRecord) => {
+    setSelectedStudentId(stu.id);
+    setActiveTab("students");
+    setSearchTerm(stu.name);
+    closeSidebar();
+  };
+
+  // Filter students
   const filteredStudents = students.filter((s) => {
     const matchesSearch =
       s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -84,14 +89,9 @@ export default function AdminDashboard() {
   const penalizedCount = students.filter((s) => s.isBlocked).length;
   const redFlagCount = students.filter((s) => s.isRedFlagged).length;
 
-  const totalWeeklyLunchesBooked = students.reduce((acc, student) => {
-    const count = DAYS.filter((day) => student.schedule[day]?.lunchSelected).length;
-    return acc + count;
-  }, 0);
-
   const handleOpenPenaltyModal = (student: StudentRecord) => {
     setSelectedStudentForBlock(student);
-    setPenaltyReasonText(student.penaltyReason || "Hostel noise complaint and meal violation");
+    setPenaltyReasonText(student.penaltyReason || "Hostel noise complaint or mess policy violation");
   };
 
   const handleConfirmPenalty = async () => {
@@ -99,11 +99,11 @@ export default function AdminDashboard() {
       await toggleStudentPenalty(selectedStudentForBlock.id, penaltyReasonText);
       setNotification({
         type: "success",
-        text: `Meal restriction imposed on ${selectedStudentForBlock.name}. Reason: ${penaltyReasonText}`,
+        text: `Meal restriction set for ${selectedStudentForBlock.name}`,
       });
       setSelectedStudentForBlock(null);
       setPenaltyReasonText("");
-      setTimeout(() => setNotification(null), 4000);
+      setTimeout(() => setNotification(null), 3000);
     }
   };
 
@@ -111,18 +111,18 @@ export default function AdminDashboard() {
     await toggleStudentPenalty(student.id);
     setNotification({
       type: "success",
-      text: `Meal restriction lifted for ${student.name}.`,
+      text: `Meal restriction lifted for ${student.name}`,
     });
-    setTimeout(() => setNotification(null), 4000);
+    setTimeout(() => setNotification(null), 3000);
   };
 
   const handleOverrideLunch = async (studentId: string, day: DayKey) => {
     await adminOverrideStudentLunch(studentId, day);
     setNotification({
       type: "success",
-      text: `Manual lunch override saved for ${day.toUpperCase()}.`,
+      text: `Lunch override updated for ${day.toUpperCase()}`,
     });
-    setTimeout(() => setNotification(null), 3000);
+    setTimeout(() => setNotification(null), 2500);
   };
 
   const handleCreateStudent = async (e: React.FormEvent) => {
@@ -138,7 +138,7 @@ export default function AdminDashboard() {
     if (res.success) {
       setNotification({
         type: "success",
-        text: `Student ${newStudentName} registered with default password "Dorm@1234".`,
+        text: `Student ${newStudentName} created (Password: Dorm@1234)`,
       });
       setShowAddStudentModal(false);
       setNewStudentName("");
@@ -147,10 +147,10 @@ export default function AdminDashboard() {
     } else {
       setNotification({
         type: "error",
-        text: res.message || "Failed to create student.",
+        text: res.message || "Failed to create student",
       });
     }
-    setTimeout(() => setNotification(null), 5000);
+    setTimeout(() => setNotification(null), 4000);
   };
 
   const handleCreateChef = async (e: React.FormEvent) => {
@@ -166,7 +166,7 @@ export default function AdminDashboard() {
     if (res.success) {
       setNotification({
         type: "success",
-        text: `Kitchen Chef ${newChefName} added with default password "Dorm@1234".`,
+        text: `Chef ${newChefName} created (Password: Dorm@1234)`,
       });
       setShowAddChefModal(false);
       setNewChefName("");
@@ -174,10 +174,10 @@ export default function AdminDashboard() {
     } else {
       setNotification({
         type: "error",
-        text: res.message || "Failed to create chef.",
+        text: res.message || "Failed to create chef",
       });
     }
-    setTimeout(() => setNotification(null), 5000);
+    setTimeout(() => setNotification(null), 4000);
   };
 
   const handleConfirmResetPassword = async () => {
@@ -186,643 +186,470 @@ export default function AdminDashboard() {
     if (res.success) {
       setNotification({
         type: "success",
-        text: `Password for ${userToReset.name} reset to "Dorm@1234".`,
+        text: `Password for ${userToReset.name} reset to "Dorm@1234"`,
       });
     } else {
-      setNotification({
-        type: "error",
-        text: res.message,
-      });
+      setNotification({ type: "error", text: res.message });
     }
     setUserToReset(null);
-    setTimeout(() => setNotification(null), 5000);
+    setTimeout(() => setNotification(null), 4000);
   };
 
   if (!isHydrated) {
     return (
-      <div className="container mx-auto px-4 py-12 max-w-7xl flex items-center justify-center min-h-[50vh]">
-        <div className="flex flex-col items-center gap-3">
-          <span className="loading loading-spinner loading-lg text-primary" />
-          <span className="text-xs font-semibold text-base-content/60">Loading administration portal...</span>
-        </div>
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <span className="loading loading-spinner loading-md text-secondary" />
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 max-w-7xl">
-      {/* Top Banner / Global Lock Controller */}
-      <div className="card bg-base-100 border border-base-300 shadow-sm p-6 mb-8">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-bold text-2xl shadow-xs shrink-0">
-              <ShieldCheck className="w-8 h-8" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-2xl sm:text-3xl font-black text-base-content">
-                  {t("adminDashboardTitle")}
-                </h1>
-                <span className="badge badge-primary badge-sm font-bold uppercase tracking-wider">
-                  Hostel Administration
-                </span>
-                <DatabaseStatusBadge />
-              </div>
-              <p className="text-xs sm:text-sm text-base-content/60 mt-1">
-                Manage student lunch privileges, user credentials, and global system freeze.
-              </p>
-            </div>
+    <div className="flex-1 flex min-h-[calc(100vh-3.5rem)] bg-base-100">
+      {/* 1. Responsive Sidebar with User Profile & Quick Student List */}
+      <DashboardSidebar
+        isOpen={isSidebarOpen}
+        onClose={closeSidebar}
+        onSelectStudent={handleSelectStudentFromSidebar}
+        selectedStudentId={selectedStudentId}
+        adminTab={activeTab}
+        onAdminTabChange={setActiveTab}
+      />
+
+      {/* 2. Main Admin Dashboard Area */}
+      <div className="flex-1 p-3 sm:p-6 lg:p-8 max-w-6xl mx-auto w-full space-y-4">
+        {notification && (
+          <AlertBanner
+            type={notification.type}
+            message={notification.text}
+            onClose={() => setNotification(null)}
+          />
+        )}
+
+        {/* Top Control Bar: Search, Stats, & Actions */}
+        <div className="p-3 sm:p-4 rounded-2xl bg-base-200/60 border border-base-300 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-xs">
+          {/* Tabs: Students / Chefs */}
+          <div className="flex items-center gap-1 bg-base-100 p-1 rounded-xl border border-base-300 shrink-0">
+            <button
+              onClick={() => setActiveTab("students")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                activeTab === "students"
+                  ? "bg-secondary text-secondary-content shadow-xs"
+                  : "text-base-content/70 hover:bg-base-200"
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Students ({students.length})</span>
+            </button>
+            <button
+              onClick={() => setActiveTab("chefs")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                activeTab === "chefs"
+                  ? "bg-secondary text-secondary-content shadow-xs"
+                  : "text-base-content/70 hover:bg-base-200"
+              }`}
+            >
+              <ChefHat className="w-3.5 h-3.5" />
+              <span>Chefs ({chefs.length})</span>
+            </button>
           </div>
 
-          {/* Master Global Lock Toggle */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 bg-base-200/50 p-4 rounded-2xl border border-base-300">
-            <div className="text-left sm:text-right">
-              <span className="block text-xs font-extrabold text-base-content uppercase tracking-wider">
-                {t("globalLockStatus")}
+          {/* Quick Metrics & Add Button */}
+          <div className="flex items-center gap-2 justify-between sm:justify-end">
+            <div className="flex items-center gap-1.5 text-xs">
+              <span className="badge badge-sm badge-error text-white font-bold gap-1">
+                {penalizedCount} Suspended
               </span>
-              <span
-                className={`text-sm font-black flex items-center gap-1.5 ${
-                  isGlobalLocked ? "text-error" : "text-success"
-                }`}
-              >
-                {isGlobalLocked ? (
-                  <>
-                    <Lock className="w-4 h-4" />
-                    <span>{t("locked")}</span>
-                  </>
-                ) : (
-                  <>
-                    <Unlock className="w-4 h-4" />
-                    <span>{t("unlocked")}</span>
-                  </>
-                )}
+              <span className="badge badge-sm badge-warning font-bold gap-1">
+                {redFlagCount} Flagged
               </span>
             </div>
 
+            {activeTab === "students" ? (
+              <button
+                onClick={() => setShowAddStudentModal(true)}
+                className="btn btn-sm btn-secondary rounded-xl text-xs font-bold gap-1.5 shadow-xs"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>Add Student</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowAddChefModal(true)}
+                className="btn btn-sm btn-secondary rounded-xl text-xs font-bold gap-1.5 shadow-xs"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>Add Chef</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Global Lock Warning Banner if active */}
+        {isGlobalLocked && (
+          <div className="p-3 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-between gap-3 text-amber-900 dark:text-amber-200 text-xs font-bold">
+            <div className="flex items-center gap-2">
+              <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>Global Lock is Active — All student choices are frozen.</span>
+            </div>
             <button
               onClick={toggleGlobalLock}
-              className={`btn btn-sm sm:btn-md font-bold gap-2 shadow-xs transition-all ${
-                isGlobalLocked
-                  ? "btn-success text-success-content"
-                  : "btn-error text-error-content"
-              }`}
+              className="btn btn-xs btn-warning font-bold rounded-lg"
             >
-              {isGlobalLocked ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-              <span>{isGlobalLocked ? t("unlockGlobalBtn") : t("lockGlobalBtn")}</span>
+              Unlock Now
             </button>
           </div>
-        </div>
-      </div>
+        )}
 
-      {/* Live System Notification */}
-      {notification && (
-        <AlertBanner
-          type={notification.type}
-          message={notification.text}
-          onClose={() => setNotification(null)}
-        />
-      )}
+        {/* ====================================================================
+            TAB 1: STUDENT MANAGEMENT & ROSTER
+            ==================================================================== */}
+        {activeTab === "students" && (
+          <div className="space-y-3">
+            {/* Search and Filters */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search by student name, room, or email..."
+                  className="input input-sm w-full bg-base-100 rounded-xl border-base-300 ps-9 pe-8 text-xs font-medium"
+                />
+                <Search className="w-4 h-4 text-base-content/40 absolute start-3 top-2.5" />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm("")}
+                    className="absolute end-2.5 top-2.5 text-base-content/40 hover:text-base-content"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
 
-      {/* Metrics Row with Reusable StatCards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatCard
-          title="Total Students"
-          value={students.length}
-          icon={<Users className="w-5 h-5" />}
-          subtext="Hostel Residents"
-          colorScheme="primary"
-        />
+              {/* Status Filter Pills */}
+              <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0">
+                {(["all", "active", "penalized", "redflags"] as const).map((filter) => (
+                  <button
+                    key={filter}
+                    onClick={() => setStatusFilter(filter)}
+                    className={`btn btn-xs rounded-lg capitalize font-bold ${
+                      statusFilter === filter
+                        ? "btn-secondary text-secondary-content"
+                        : "btn-ghost bg-base-200/60 text-base-content/70"
+                    }`}
+                  >
+                    {filter === "all"
+                      ? "All"
+                      : filter === "redflags"
+                      ? "Flagged"
+                      : filter}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-        <StatCard
-          title="Lunches Booked"
-          value={totalWeeklyLunchesBooked}
-          icon={<Calendar className="w-5 h-5" />}
-          subtext="Active Pre-selections"
-          colorScheme="accent"
-        />
-
-        <StatCard
-          title="Restricted Students"
-          value={penalizedCount}
-          icon={<ShieldAlert className="w-5 h-5" />}
-          subtext="Selection Blocked"
-          colorScheme="error"
-        />
-
-        <StatCard
-          title="Red-Flagged Absences"
-          value={redFlagCount}
-          icon={<AlertTriangle className="w-5 h-5" />}
-          subtext="Missed Reserved Lunch"
-          colorScheme="warning"
-        />
-      </div>
-
-      {/* Main Tabs and Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div className="flex items-center gap-2 p-1.5 bg-base-200 rounded-2xl w-fit">
-          <button
-            onClick={() => setActiveTab("students")}
-            className={`btn btn-sm rounded-xl font-bold gap-2 transition-all ${
-              activeTab === "students" ? "btn-primary shadow-xs" : "btn-ghost text-base-content/70"
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            <span>Students Roster ({students.length})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("chefs")}
-            className={`btn btn-sm rounded-xl font-bold gap-2 transition-all ${
-              activeTab === "chefs" ? "btn-primary shadow-xs" : "btn-ghost text-base-content/70"
-            }`}
-          >
-            <ChefHat className="w-4 h-4" />
-            <span>Kitchen Chefs ({chefs.length})</span>
-          </button>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2">
-          {activeTab === "students" ? (
-            <button
-              onClick={() => setShowAddStudentModal(true)}
-              className="btn btn-sm btn-primary font-bold gap-1.5 shadow-xs"
-            >
-              <UserPlus className="w-4 h-4" />
-              <span>{t("createStudentBtn")}</span>
-            </button>
-          ) : (
-            <button
-              onClick={() => setShowAddChefModal(true)}
-              className="btn btn-sm btn-primary font-bold gap-1.5 shadow-xs"
-            >
-              <ChefHat className="w-4 h-4" />
-              <span>{t("createChefBtn")}</span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Search and Filters */}
-      {activeTab === "students" && (
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-          <div className="relative w-full md:w-80">
-            <input
-              type="text"
-              placeholder="Search by name, room, or email..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="input input-sm input-bordered w-full pl-9 text-xs"
-            />
-            <Search className="w-4 h-4 text-base-content/40 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => setStatusFilter("all")}
-              className={`badge badge-sm font-bold cursor-pointer py-3 px-3 transition-all ${
-                statusFilter === "all" ? "badge-primary" : "badge-ghost opacity-60"
-              }`}
-            >
-              All Residents ({students.length})
-            </button>
-            <button
-              onClick={() => setStatusFilter("active")}
-              className={`badge badge-sm font-bold cursor-pointer py-3 px-3 transition-all ${
-                statusFilter === "active" ? "badge-success text-white" : "badge-ghost opacity-60"
-              }`}
-            >
-              Active ({students.filter((s) => !s.isBlocked && !s.isRedFlagged).length})
-            </button>
-            <button
-              onClick={() => setStatusFilter("penalized")}
-              className={`badge badge-sm font-bold cursor-pointer py-3 px-3 transition-all ${
-                statusFilter === "penalized" ? "badge-error text-white" : "badge-ghost opacity-60"
-              }`}
-            >
-              Blocked ({penalizedCount})
-            </button>
-            <button
-              onClick={() => setStatusFilter("redflags")}
-              className={`badge badge-sm font-bold cursor-pointer py-3 px-3 transition-all ${
-                statusFilter === "redflags" ? "badge-warning text-black" : "badge-ghost opacity-60"
-              }`}
-            >
-              Red-Flagged ({redFlagCount})
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Students Table */}
-      {activeTab === "students" ? (
-        <div className="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="table table-zebra w-full text-xs">
-              <thead className="bg-base-200/80 text-base-content/80 uppercase font-extrabold text-[11px]">
-                <tr>
-                  <th>Student Info</th>
-                  <th>Room</th>
-                  <th>Weekly Lunch Selections (Click Day to Override)</th>
-                  <th>Account Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredStudents.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="text-center py-8 text-base-content/50">
-                      No student records found.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredStudents.map((student) => {
-                    const bookedCount = DAYS.filter((d) => student.schedule[d]?.lunchSelected).length;
-
-                    return (
-                      <tr key={student.id} className="hover">
-                        {/* Student Name */}
-                        <td>
-                          <div className="font-bold text-sm text-base-content">
+            {/* Students List: Responsive Cards */}
+            <div className="space-y-2">
+              {filteredStudents.map((student) => (
+                <div
+                  key={student.id}
+                  id={`student-${student.id}`}
+                  className={`p-3 sm:p-4 rounded-2xl bg-base-100 border transition-all ${
+                    selectedStudentId === student.id
+                      ? "border-secondary ring-1 ring-secondary/30 shadow-xs"
+                      : "border-base-300 hover:border-base-400"
+                  }`}
+                >
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                    {/* Student Info */}
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-secondary/10 text-secondary font-black text-sm flex items-center justify-center shrink-0">
+                        {student.name.charAt(0)}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-sm text-base-content truncate">
                             {student.name}
-                          </div>
-                          <div className="text-[11px] text-base-content/60 font-mono">
-                            {student.email}
-                          </div>
-                        </td>
-
-                        {/* Room */}
-                        <td>
-                          <span className="badge badge-outline font-bold text-xs">
+                          </span>
+                          <span className="badge badge-sm badge-ghost text-[10px] font-semibold">
                             {student.room}
                           </span>
-                        </td>
 
-                        {/* Weekly Lunch Selections with Instant Admin Override */}
-                        <td>
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            {DAYS.map((day) => {
-                              const isSelected = student.schedule[day]?.lunchSelected;
-                              return (
-                                <button
-                                  key={day}
-                                  onClick={() => handleOverrideLunch(student.id, day)}
-                                  title={`Click to manually toggle ${day.toUpperCase()} lunch for ${student.name}`}
-                                  className={`badge badge-xs font-extrabold uppercase text-[10px] py-2 px-1.5 transition-all hover:scale-110 cursor-pointer ${
-                                    isSelected
-                                      ? "badge-primary text-primary-content"
-                                      : "badge-ghost opacity-40 line-through"
-                                  }`}
-                                >
-                                  {day}
-                                </button>
-                              );
-                            })}
-                            <span className="text-[11px] text-base-content/70 font-black ml-1">
-                              ({bookedCount}/7)
+                          {student.isBlocked ? (
+                            <span className="badge badge-sm badge-error text-white font-bold gap-1 text-[10px]">
+                              <ShieldAlert className="w-2.5 h-2.5" /> Suspended
                             </span>
-                          </div>
-                        </td>
+                          ) : student.isRedFlagged ? (
+                            <span className="badge badge-sm badge-warning font-bold gap-1 text-[10px]">
+                              <AlertTriangle className="w-2.5 h-2.5" /> Red Flag
+                            </span>
+                          ) : (
+                            <span className="badge badge-sm badge-success text-success-content font-bold text-[10px]">
+                              Active
+                            </span>
+                          )}
 
-                        {/* Status (Blocked / Red-Flagged / Active / Password Status) */}
-                        <td>
-                          <div className="flex flex-col gap-1">
-                            {student.isBlocked && (
-                              <span className="badge badge-error gap-1 text-[10px] font-bold text-white py-2">
-                                <ShieldAlert className="w-3 h-3" />
-                                Selection Blocked
-                              </span>
-                            )}
-                            {student.isRedFlagged && (
-                              <span className="badge badge-warning gap-1 text-[10px] font-bold text-amber-950 py-2">
-                                <AlertTriangle className="w-3 h-3" />
-                                Red-Flagged Absent
-                              </span>
-                            )}
-                            {!student.isBlocked && !student.isRedFlagged && (
-                              <span className="badge badge-success gap-1 text-[10px] font-bold text-success-content py-2">
-                                <CheckCircle2 className="w-3 h-3" />
-                                Normal & Permitted
-                              </span>
-                            )}
-                            {student.isPasswordReset && (
-                              <span className="badge badge-outline badge-info gap-1 text-[10px] font-bold py-1">
-                                <KeyRound className="w-3 h-3" />
-                                Default Pass Active
-                              </span>
-                            )}
-                            {student.penaltyReason && (
-                              <span className="text-[10px] text-rose-600 dark:text-rose-400 italic">
-                                {student.penaltyReason}
-                              </span>
-                            )}
-                          </div>
-                        </td>
+                          {student.isPasswordReset && (
+                            <span className="badge badge-sm badge-ghost text-[9px] font-semibold text-warning">
+                              Default Pass
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-base-content/60 truncate mt-0.5">
+                          {student.email}
+                          {student.penaltyReason && ` • ${student.penaltyReason}`}
+                        </p>
+                      </div>
+                    </div>
 
-                        {/* Actions: Block / Reset Password / Delete */}
-                        <td>
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            {student.isBlocked ? (
-                              <button
-                                onClick={() => handleLiftPenalty(student)}
-                                className="btn btn-xs btn-outline btn-success font-bold gap-1"
-                              >
-                                <CheckCircle2 className="w-3 h-3" />
-                                <span>{t("unblockStudentBtn")}</span>
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => handleOpenPenaltyModal(student)}
-                                className="btn btn-xs btn-outline btn-error font-bold gap-1"
-                              >
-                                <ShieldAlert className="w-3 h-3" />
-                                <span>{t("blockStudentBtn")}</span>
-                              </button>
-                            )}
+                    {/* Middle: Day-by-Day Meal Override Pills */}
+                    <div className="flex items-center gap-1 overflow-x-auto py-1 lg:py-0">
+                      <span className="text-[10px] font-bold text-base-content/40 uppercase tracking-wider me-1">
+                        Override:
+                      </span>
+                      {DAYS.map((day) => {
+                        const isSelected = student.schedule[day]?.lunchSelected;
+                        return (
+                          <button
+                            key={day}
+                            type="button"
+                            onClick={() => handleOverrideLunch(student.id, day)}
+                            className={`px-2 py-1 rounded-lg text-[10px] font-extrabold uppercase transition-all ${
+                              isSelected
+                                ? "bg-primary text-primary-content shadow-xs"
+                                : "bg-base-200 text-base-content/40 hover:bg-base-300"
+                            }`}
+                            title={`Click to toggle lunch for ${day.toUpperCase()}`}
+                          >
+                            {day}
+                          </button>
+                        );
+                      })}
+                    </div>
 
-                            {/* Reset Password Button */}
-                            <button
-                              onClick={() => setUserToReset({ id: student.id, name: student.name, role: "Student" })}
-                              className="btn btn-xs btn-outline btn-warning font-bold gap-1"
-                              title="Reset Password back to default 'Dorm@1234'"
-                            >
-                              <RotateCcw className="w-3 h-3" />
-                              <span>Reset Pass</span>
-                            </button>
+                    {/* Action Buttons */}
+                    <div className="flex items-center gap-1.5 self-end lg:self-center shrink-0">
+                      {student.isBlocked ? (
+                        <button
+                          onClick={() => handleLiftPenalty(student)}
+                          className="btn btn-xs btn-outline btn-success font-bold rounded-lg text-[10px]"
+                        >
+                          Lift Block
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleOpenPenaltyModal(student)}
+                          className="btn btn-xs btn-outline btn-error font-bold rounded-lg text-[10px]"
+                        >
+                          Block
+                        </button>
+                      )}
 
-                            <button
-                              onClick={() => deleteStudent(student.id)}
-                              className="btn btn-xs btn-ghost btn-circle text-error hover:bg-error/10"
-                              title="Delete Student Record"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                      <button
+                        onClick={() =>
+                          setUserToReset({ id: student.id, name: student.name, role: "Student" })
+                        }
+                        className="btn btn-xs btn-ghost btn-circle text-base-content/70 hover:text-base-content"
+                        title="Reset Password to Dorm@1234"
+                      >
+                        <KeyRound className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        onClick={() => deleteStudent(student.id)}
+                        className="btn btn-xs btn-ghost btn-circle text-error/70 hover:text-error"
+                        title="Delete Student"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {filteredStudents.length === 0 && (
+                <div className="p-8 rounded-2xl bg-base-100 border border-base-300 text-center text-xs text-base-content/60">
+                  No students matching your filter criteria.
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      ) : (
-        /* Chefs Table */
-        <div className="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="table table-zebra w-full text-xs">
-              <thead className="bg-base-200/80 text-base-content/80 uppercase font-extrabold text-[11px]">
-                <tr>
-                  <th>Chef Name</th>
-                  <th>Email</th>
-                  <th>Shift Assignment</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {chefs.map((chef) => (
-                  <tr key={chef.id} className="hover">
-                    <td className="font-bold text-sm text-base-content flex items-center gap-2">
-                      <ChefHat className="w-4 h-4 text-emerald-500" />
-                      <span>{chef.name}</span>
-                    </td>
-                    <td className="font-mono text-base-content/70">{chef.email}</td>
-                    <td>
-                      <span className="badge badge-outline badge-primary font-bold">
+        )}
+
+        {/* ====================================================================
+            TAB 2: KITCHEN CHEFS
+            ==================================================================== */}
+        {activeTab === "chefs" && (
+          <div className="space-y-2">
+            {chefs.map((chef) => (
+              <div
+                key={chef.id}
+                className="p-3 sm:p-4 rounded-2xl bg-base-100 border border-base-300 flex items-center justify-between gap-3"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-accent/10 text-accent font-black text-sm flex items-center justify-center shrink-0">
+                    <ChefHat className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-sm text-base-content truncate">
+                        {chef.name}
+                      </span>
+                      <span className="badge badge-sm badge-accent font-semibold text-[10px]">
                         {chef.shift}
                       </span>
-                    </td>
-                    <td>
-                      <div className="flex flex-col gap-1">
-                        <span className="badge badge-success badge-xs font-bold text-success-content">
-                          Active Kitchen Staff
+                      {chef.isPasswordReset && (
+                        <span className="badge badge-sm badge-ghost text-[9px] font-semibold text-warning">
+                          Default Pass
                         </span>
-                        {chef.isPasswordReset && (
-                          <span className="badge badge-outline badge-info badge-xs font-bold gap-1">
-                            <KeyRound className="w-2.5 h-2.5" />
-                            Default Pass Active
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td>
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => setUserToReset({ id: chef.id, name: chef.name, role: "Chef" })}
-                          className="btn btn-xs btn-outline btn-warning font-bold gap-1"
-                          title="Reset Password back to default 'Dorm@1234'"
-                        >
-                          <RotateCcw className="w-3 h-3" />
-                          <span>Reset Pass</span>
-                        </button>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-base-content/60 truncate mt-0.5">
+                      {chef.email}
+                    </p>
+                  </div>
+                </div>
 
-                        <button
-                          onClick={() => deleteChef(chef.id)}
-                          className="btn btn-xs btn-ghost btn-circle text-error hover:bg-error/10"
-                          title="Remove Chef Account"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    onClick={() =>
+                      setUserToReset({ id: chef.id, name: chef.name, role: "Chef" })
+                    }
+                    className="btn btn-xs btn-ghost btn-circle text-base-content/70 hover:text-base-content"
+                    title="Reset Password to Dorm@1234"
+                  >
+                    <KeyRound className="w-3.5 h-3.5" />
+                  </button>
 
-      {/* Modal: Reset Password Confirmation */}
-      {userToReset && (
-        <div className="modal modal-open">
-          <div className="modal-box max-w-md bg-base-100 border border-base-300 shadow-2xl">
-            <div className="flex items-center justify-between pb-3 border-b border-base-200">
-              <h3 className="font-bold text-base text-amber-600 flex items-center gap-2">
-                <RotateCcw className="w-5 h-5" />
-                <span>Reset User Password</span>
-              </h3>
-              <button
-                onClick={() => setUserToReset(null)}
-                className="btn btn-sm btn-ghost btn-circle"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="py-4 space-y-3">
-              <p className="text-xs text-base-content/80 leading-relaxed">
-                Are you sure you want to reset the password for{" "}
-                <span className="font-bold text-base-content">{userToReset.name}</span> ({userToReset.role})?
-              </p>
-
-              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-200">
-                Password will be restored to: <strong className="font-mono text-primary font-black">Dorm@1234</strong>
-                <br />
-                User will be marked with <code className="font-bold">isPasswordReset: true</code> until they change it.
+                  <button
+                    onClick={() => deleteChef(chef.id)}
+                    className="btn btn-xs btn-ghost btn-circle text-error/70 hover:text-error"
+                    title="Delete Chef"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
-            </div>
+            ))}
 
-            <div className="modal-action border-t border-base-200 pt-3">
-              <button
-                type="button"
-                onClick={() => setUserToReset(null)}
-                className="btn btn-sm btn-ghost"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmResetPassword}
-                className="btn btn-sm btn-warning font-bold gap-1.5"
-              >
-                <RotateCcw className="w-4 h-4" />
-                <span>Confirm Reset</span>
-              </button>
-            </div>
+            {chefs.length === 0 && (
+              <div className="p-8 rounded-2xl bg-base-100 border border-base-300 text-center text-xs text-base-content/60">
+                No chefs currently registered.
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* Modal: Block Student Meal Selection */}
+      {/* ====================================================================
+          MODAL: IMPOSE PENALTY / BLOCK STUDENT
+          ==================================================================== */}
       {selectedStudentForBlock && (
-        <div className="modal modal-open">
-          <div className="modal-box max-w-md bg-base-100 border border-base-300 shadow-2xl">
-            <div className="flex items-center justify-between pb-3 border-b border-base-200">
-              <h3 className="font-bold text-base text-rose-600 flex items-center gap-2">
-                <ShieldAlert className="w-5 h-5" />
-                <span>Impose Meal Selection Block</span>
-              </h3>
-              <button
-                onClick={() => setSelectedStudentForBlock(null)}
-                className="btn btn-sm btn-ghost btn-circle"
-              >
-                <X className="w-4 h-4" />
-              </button>
+        <div className="modal modal-open modal-bottom sm:modal-middle">
+          <div className="modal-box rounded-3xl p-5 max-w-sm">
+            <h3 className="font-extrabold text-base text-error flex items-center gap-2">
+              <ShieldAlert className="w-5 h-5" />
+              <span>Suspend Meal Privileges</span>
+            </h3>
+            <p className="text-xs text-base-content/70 mt-1">
+              Student: <strong>{selectedStudentForBlock.name}</strong> ({selectedStudentForBlock.room})
+            </p>
+
+            <div className="mt-3 space-y-2">
+              <label className="text-[11px] font-bold text-base-content/70">
+                Administrative Reason
+              </label>
+              <textarea
+                value={penaltyReasonText}
+                onChange={(e) => setPenaltyReasonText(e.target.value)}
+                placeholder="Specify violation..."
+                rows={3}
+                className="textarea textarea-sm w-full bg-base-200/60 rounded-xl text-xs"
+              />
             </div>
 
-            <div className="py-4 space-y-4">
-              <p className="text-xs text-base-content/80 leading-relaxed">
-                Blocking will immediately freeze lunch modification permissions for{" "}
-                <span className="font-bold text-base-content">{selectedStudentForBlock.name}</span>.
-              </p>
-
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text font-bold text-xs">
-                    Disciplinary Penalty / Reason
-                  </span>
-                </label>
-                <textarea
-                  value={penaltyReasonText}
-                  onChange={(e) => setPenaltyReasonText(e.target.value)}
-                  placeholder="e.g., Hostel noise complaint or unauthorized guest violation"
-                  rows={3}
-                  className="textarea textarea-bordered text-xs focus:textarea-primary"
-                />
-              </div>
-            </div>
-
-            <div className="modal-action border-t border-base-200 pt-3">
+            <div className="modal-action mt-4">
               <button
-                type="button"
                 onClick={() => setSelectedStudentForBlock(null)}
-                className="btn btn-sm btn-ghost"
+                className="btn btn-sm btn-ghost rounded-xl text-xs font-bold"
               >
                 Cancel
               </button>
               <button
-                type="button"
                 onClick={handleConfirmPenalty}
-                className="btn btn-sm btn-error font-bold text-white gap-1.5"
+                className="btn btn-sm btn-error text-white rounded-xl text-xs font-bold"
               >
-                <ShieldAlert className="w-4 h-4" />
-                <span>Enforce Restriction</span>
+                Confirm Block
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal: Create New Student */}
+      {/* ====================================================================
+          MODAL: ADD NEW STUDENT
+          ==================================================================== */}
       {showAddStudentModal && (
-        <div className="modal modal-open">
-          <div className="modal-box max-w-md bg-base-100 border border-base-300 shadow-2xl">
-            <div className="flex items-center justify-between pb-3 border-b border-base-200">
-              <h3 className="font-bold text-base text-primary flex items-center gap-2">
-                <UserPlus className="w-5 h-5" />
-                <span>Register New Student</span>
-              </h3>
-              <button
-                onClick={() => setShowAddStudentModal(false)}
-                className="btn btn-sm btn-ghost btn-circle"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+        <div className="modal modal-open modal-bottom sm:modal-middle">
+          <div className="modal-box rounded-3xl p-5 max-w-md">
+            <h3 className="font-extrabold text-base text-base-content flex items-center gap-2">
+              <UserPlus className="w-5 h-5 text-secondary" />
+              <span>Register Student</span>
+            </h3>
 
-            <form onSubmit={handleCreateStudent} className="py-4 space-y-3">
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text font-bold text-xs">Full Name</span>
-                </label>
+            <form onSubmit={handleCreateStudent} className="space-y-3 mt-3">
+              <div>
+                <label className="text-[11px] font-bold text-base-content/70">Full Name</label>
                 <input
                   type="text"
                   required
                   value={newStudentName}
                   onChange={(e) => setNewStudentName(e.target.value)}
-                  placeholder="e.g. Tariq Bin Ziyad"
-                  className="input input-sm input-bordered text-xs focus:input-primary"
+                  placeholder="e.g. Tariq Mansoor"
+                  className="input input-sm w-full bg-base-200/60 rounded-xl text-xs mt-1"
                 />
               </div>
 
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text font-bold text-xs">Email Address</span>
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={newStudentEmail}
-                  onChange={(e) => setNewStudentEmail(e.target.value)}
-                  placeholder="tariq@hostel.edu"
-                  className="input input-sm input-bordered text-xs focus:input-primary"
-                />
-              </div>
-
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text font-bold text-xs">Room Number</span>
-                </label>
+              <div>
+                <label className="text-[11px] font-bold text-base-content/70">Hostel Room</label>
                 <input
                   type="text"
                   required
                   value={newStudentRoom}
                   onChange={(e) => setNewStudentRoom(e.target.value)}
-                  placeholder="e.g. B-205"
-                  className="input input-sm input-bordered text-xs focus:input-primary"
+                  placeholder="e.g. B-204"
+                  className="input input-sm w-full bg-base-200/60 rounded-xl text-xs mt-1"
                 />
               </div>
 
-              <div className="p-3 bg-base-200/50 rounded-xl border border-base-300 text-[11px] text-base-content/70">
-                Default password will be set automatically to:{" "}
-                <strong className="text-primary font-mono font-black">Dorm@1234</strong>
-                <br />
-                User will be prompted with <code className="font-bold">isPasswordReset: true</code>.
+              <div>
+                <label className="text-[11px] font-bold text-base-content/70">Email Address</label>
+                <input
+                  type="email"
+                  required
+                  value={newStudentEmail}
+                  onChange={(e) => setNewStudentEmail(e.target.value)}
+                  placeholder="student@hostel.edu"
+                  className="input input-sm w-full bg-base-200/60 rounded-xl text-xs mt-1"
+                />
               </div>
 
-              <div className="modal-action border-t border-base-200 pt-3">
+              <p className="text-[10px] text-base-content/50">
+                Default password will be set to <code>Dorm@1234</code>. Student will be prompted to change it on first login.
+              </p>
+
+              <div className="modal-action mt-4">
                 <button
                   type="button"
                   onClick={() => setShowAddStudentModal(false)}
-                  className="btn btn-sm btn-ghost"
+                  className="btn btn-sm btn-ghost rounded-xl text-xs font-bold"
                 >
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-sm btn-primary font-bold">
+                <button
+                  type="submit"
+                  className="btn btn-sm btn-secondary rounded-xl text-xs font-bold"
+                >
                   Create Student
                 </button>
               </div>
@@ -831,87 +658,102 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* Modal: Create New Chef */}
+      {/* ====================================================================
+          MODAL: ADD NEW CHEF
+          ==================================================================== */}
       {showAddChefModal && (
-        <div className="modal modal-open">
-          <div className="modal-box max-w-md bg-base-100 border border-base-300 shadow-2xl">
-            <div className="flex items-center justify-between pb-3 border-b border-base-200">
-              <h3 className="font-bold text-base text-primary flex items-center gap-2">
-                <ChefHat className="w-5 h-5" />
-                <span>Add Kitchen Chef Account</span>
-              </h3>
-              <button
-                onClick={() => setShowAddChefModal(false)}
-                className="btn btn-sm btn-ghost btn-circle"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+        <div className="modal modal-open modal-bottom sm:modal-middle">
+          <div className="modal-box rounded-3xl p-5 max-w-md">
+            <h3 className="font-extrabold text-base text-base-content flex items-center gap-2">
+              <ChefHat className="w-5 h-5 text-accent" />
+              <span>Register Mess Chef</span>
+            </h3>
 
-            <form onSubmit={handleCreateChef} className="py-4 space-y-3">
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text font-bold text-xs">Chef Name</span>
-                </label>
+            <form onSubmit={handleCreateChef} className="space-y-3 mt-3">
+              <div>
+                <label className="text-[11px] font-bold text-base-content/70">Full Name</label>
                 <input
                   type="text"
                   required
                   value={newChefName}
                   onChange={(e) => setNewChefName(e.target.value)}
-                  placeholder="e.g. Chef Youssef Al-Hassan"
-                  className="input input-sm input-bordered text-xs focus:input-primary"
+                  placeholder="e.g. Chef Kareem"
+                  className="input input-sm w-full bg-base-200/60 rounded-xl text-xs mt-1"
                 />
               </div>
 
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text font-bold text-xs">Email Address</span>
-                </label>
+              <div>
+                <label className="text-[11px] font-bold text-base-content/70">Shift Schedule</label>
+                <input
+                  type="text"
+                  required
+                  value={newChefShift}
+                  onChange={(e) => setNewChefShift(e.target.value)}
+                  placeholder="e.g. Lunch & Dinner Shift"
+                  className="input input-sm w-full bg-base-200/60 rounded-xl text-xs mt-1"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-base-content/70">Email Address</label>
                 <input
                   type="email"
                   required
                   value={newChefEmail}
                   onChange={(e) => setNewChefEmail(e.target.value)}
-                  placeholder="youssef@hostel.edu"
-                  className="input input-sm input-bordered text-xs focus:input-primary"
+                  placeholder="chef@hostel.edu"
+                  className="input input-sm w-full bg-base-200/60 rounded-xl text-xs mt-1"
                 />
               </div>
 
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text font-bold text-xs">Assigned Shift</span>
-                </label>
-                <select
-                  value={newChefShift}
-                  onChange={(e) => setNewChefShift(e.target.value)}
-                  className="select select-sm select-bordered text-xs focus:select-primary"
-                >
-                  <option value="Morning & Lunch Session">Morning & Lunch Session</option>
-                  <option value="Lunch & Evening Session">Lunch & Evening Session</option>
-                  <option value="Full Day Mess Manager">Full Day Mess Manager</option>
-                </select>
-              </div>
-
-              <div className="p-3 bg-base-200/50 rounded-xl border border-base-300 text-[11px] text-base-content/70">
-                Default password will be set automatically to:{" "}
-                <strong className="text-primary font-mono font-black">Dorm@1234</strong>
-                <br />
-                User will be prompted with <code className="font-bold">isPasswordReset: true</code>.
-              </div>
-
-              <div className="modal-action border-t border-base-200 pt-3">
+              <div className="modal-action mt-4">
                 <button
                   type="button"
                   onClick={() => setShowAddChefModal(false)}
-                  className="btn btn-sm btn-ghost"
+                  className="btn btn-sm btn-ghost rounded-xl text-xs font-bold"
                 >
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-sm btn-primary font-bold">
+                <button
+                  type="submit"
+                  className="btn btn-sm btn-secondary rounded-xl text-xs font-bold"
+                >
                   Create Chef
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ====================================================================
+          MODAL: RESET PASSWORD CONFIRMATION
+          ==================================================================== */}
+      {userToReset && (
+        <div className="modal modal-open modal-bottom sm:modal-middle">
+          <div className="modal-box rounded-3xl p-5 max-w-sm">
+            <h3 className="font-extrabold text-base text-base-content flex items-center gap-2">
+              <KeyRound className="w-5 h-5 text-warning" />
+              <span>Reset Password</span>
+            </h3>
+            <p className="text-xs text-base-content/70 mt-2">
+              Reset password for <strong>{userToReset.name}</strong> ({userToReset.role}) back to default: <code>Dorm@1234</code>?
+            </p>
+
+            <div className="modal-action mt-4">
+              <button
+                onClick={() => setUserToReset(null)}
+                className="btn btn-sm btn-ghost rounded-xl text-xs font-bold"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmResetPassword}
+                className="btn btn-sm btn-warning rounded-xl text-xs font-bold"
+              >
+                Confirm Reset
+              </button>
+            </div>
           </div>
         </div>
       )}

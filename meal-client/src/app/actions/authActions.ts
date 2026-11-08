@@ -58,9 +58,26 @@ export interface UserListItem {
 
 const DEFAULT_PASSWORD = "Dorm@1234";
 
-// Helper: Saturday of current week
-export async function getCurrentSaturday(): Promise<string> {
-  const now = new Date();
+// Helper: Saturday of target selection week
+// On Friday (5), the target is tomorrow (upcoming Saturday).
+// On Sat-Thu, it is the most recent Saturday of the active week.
+export async function getSelectionSaturday(targetDate?: Date | string): Promise<string> {
+  const now = targetDate ? new Date(targetDate) : new Date();
+  const day = now.getDay();
+  if (day === 5) {
+    const upcomingSat = new Date(now);
+    upcomingSat.setDate(now.getDate() + 1);
+    return upcomingSat.toISOString().split("T")[0];
+  }
+  const diffToSaturday = day === 6 ? 0 : -(day + 1);
+  const saturday = new Date(now);
+  saturday.setDate(now.getDate() + diffToSaturday);
+  return saturday.toISOString().split("T")[0];
+}
+
+// Helper: Saturday of current operating week
+export async function getCurrentSaturday(targetDate?: Date | string): Promise<string> {
+  const now = targetDate ? new Date(targetDate) : new Date();
   const day = now.getDay(); // 0 is Sun, 6 is Sat
   const diffToSaturday = day === 6 ? 0 : -(day + 1);
   const saturday = new Date(now);

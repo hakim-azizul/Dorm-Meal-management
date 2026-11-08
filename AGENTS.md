@@ -202,18 +202,18 @@ Every state-altering administrative or disciplinary operation creates an immutab
 ---
 
 ### 3.2 Student Business Rules
-1. **Operating Week Structure**:
+1. **Operating Week Structure & Upcoming Cycle Logic**:
    - The meal schedule follows a fixed 7-day cycle: **Saturday through Friday**.
-   - Current week start date (`weekStartDate`) is always the ISO date string (`YYYY-MM-DD`) of the nearest past Saturday.
+   - During Saturday through Thursday, students view the active operating week with lunch choices locked.
+   - On **Fridays** (`new Date().getDay() === 5`), the selection window opens exclusively for the **upcoming week cycle** (starting tomorrow, Saturday, through to the following Friday).
+   - Once a new Friday arrives, selections advance to the next subsequent weekly cycle.
 2. **Fixed Daily Meals (Breakfast & Dinner)**:
-   - Breakfast and dinner are universally pre-selected and fully funded for all enrolled residents.
-   - No interactive checkboxes exist for breakfast or dinner; they are displayed as guaranteed daily allotments:
-     - *Breakfast*: Standard continental spread (Fresh bread, eggs, butter, jam, tea).
-     - *Dinner*: Standard hot dinner (Grilled chicken/lentil dal, basmati rice, salad).
-3. **Friday-Only Lunch Selection Window**:
+   - Breakfast and dinner are universally guaranteed daily allotments for all enrolled residents.
+   - Compressed alongside Lunch into a **single clean horizontal line/row** per day.
+3. **Strict Friday-Only Lunch Selection (Zero Dev Simulation Toggles)**:
    - Students may **only** alter lunch preferences on **Fridays** (`new Date().getDay() === 5`).
-   - On Saturday through Thursday, all lunch checkboxes are rendered disabled and non-interactive.
-   - **Development Simulation Flag**: In development (`NODE_ENV === "development"`), students can toggle the "Simulate Friday Selection Window" switch. This sends `simulateFriday: true` to bypass the day check for testing. In production, this flag is strictly ignored.
+   - On Saturday through Thursday, all lunch controls are rendered locked and non-interactive.
+   - Simulation flags and bypass toggles are completely eradicated; the system strictly enforces real calendar day checks across edge actions and REST controllers.
 4. **Administrative Block Enforcements**:
    - If `user.isBlocked === true`, the student is barred from making meal selections.
    - An alert banner is displayed: `"ACCESS RESTRICTED: Your meal selection privileges have been temporarily suspended by the warden."`
@@ -297,7 +297,8 @@ weekly-meal/
 │       │       └── student/
 │       │           └── page.tsx            ← Resident Portal: 7-day Meal Grid, Friday selection
 │       ├── components/
-│       │   ├── Navbar.tsx                  ← Sticky Navigation Bar with Role isolation & Language
+│       │   ├── Navbar.tsx                  ← Minimalist Top Navigation with Brand & Mobile Sidebar trigger
+│       │   ├── DashboardSidebar.tsx        ← Role-Isolated Sidebar (Section 1: Profile & Pass, Section 2: Nav)
 │       │   ├── Footer.tsx                  ← Application Footer
 │       │   ├── PasswordChangeModal.tsx     ← Force password update modal for newly seeded accounts
 │       │   └── ui/
@@ -545,14 +546,13 @@ Base URL: `http://localhost:5000` (or production host domain). All protected end
   {
     "studentId": "67...",
     "weekStartDate": "2026-10-24",
-    "lunchSelections": { "sat": true, "sun": false, "mon": true, "tue": true, "wed": false, "thu": true, "fri": false },
-    "simulateFriday": true
+    "lunchSelections": { "sat": true, "sun": false, "mon": true, "tue": true, "wed": false, "thu": true, "fri": false }
   }
   ```
 - **Constraints Enforced**:
   - Returns `403` if student `isBlocked`.
   - Returns `403` if `isGlobalLocked` is active.
-  - Returns `400` if not Friday (unless `simulateFriday: true` in `development` mode).
+  - Returns `400` if not Friday (real calendar Friday strictly required).
 
 ---
 

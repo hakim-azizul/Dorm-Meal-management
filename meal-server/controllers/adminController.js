@@ -226,3 +226,121 @@ export const deleteUser = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// GET /api/admin/weekly-report
+export const getWeeklyReport = async (req, res) => {
+  try {
+    const DAY_KEYS = ["sat", "sun", "mon", "tue", "wed", "thu", "fri"];
+    const targetWeek = req.query.weekStartDate || getCurrentWeekStartDate();
+
+    const students = await User.find({ role: "student" }).sort({ room: 1, name: 1 });
+    const studentIds = students.map((s) => s._id);
+
+    // Compute 7 calendar dates (YYYY-MM-DD) starting from Saturday targetWeek
+    const weekStartObj = new Date(targetWeek);
+    const datesMap = {};
+    DAY_KEYS.forEach((day, index) => {
+      const d = new Date(weekStartObj);
+      d.setDate(weekStartObj.getDate() + index);
+      datesMap[day] = d.toISOString().split("T")[0];
+    });
+    const weekDates = Object.values(datesMap);
+
+    const selections = await MealSelection.find({
+      studentId: { $in: studentIds },
+      weekStartDate: targetWeek,
+    });
+
+    const attendances = await Attendance.find({
+      studentId: { $in: studentIds },
+      date: { $in: weekDates },
+    });
+
+    const selectionByStudent = new Map();
+    selections.forEach((sel) => {
+      selectionByStudent.set(sel.studentId.toString(), sel.lunchSelections || {});
+    });
+
+    const attendanceByStudent = new Map();
+    attendances.forEach((att) => {
+      const sId = att.studentId.toString();
+      if (!attendanceByStudent.has(sId)) {
+        attendanceByStudent.set(sId, new Map());
+      }
+      const key = `${att.date}_${att.mealType}`;
+      attendanceByStudent.get(sId).set(key, att.status);
+    });
+
+    const report = students.map((stu) => {
+      const sId = stu._id.toString();
+      const lunchPrefs = selectionByStudent.get(sId) || {
+        sat: true,
+        sun: true,
+        mon: true,
+        tue: true,
+        wed: true,
+        thu: true,
+        fri: false,
+      };
+
+      const daysBreakdown = {};
+      let totalLunchesBooked = 0;
+      let totalLunchesAttended = 0;
+      let totalLunchesMissed = 0;
+      let totalBreakfastsAttended = 0;
+      let totalDinnersAttended = 0;
+
+      DAY_KEYS.forEach((day) => {
+        const dateStr = datesMap[day];
+        const studentAttMap = attendanceByStudent.get(sId);
+        const lunchBooked = Boolean(lunchPrefs[day]);
+        if (lunchBooked) totalLunchesBooked++;
+
+        const lunchAtt = studentAttMap?.get(`${dateStr}_lunch`) || "unmarked";
+        const breakfastAtt = studentAttMap?.get(`${dateStr}_breakfast`) || "unmarked";
+        const dinnerAtt = studentAttMap?.get(`${dateStr}_dinner`) || "unmarked";
+
+        if (lunchAtt === "present") totalLunchesAttended++;
+        if (lunchBooked && lunchAtt === "absent") totalLunchesMissed++;
+        if (breakfastAtt === "present") totalBreakfastsAttended++;
+        if (dinnerAtt === "present") totalDinnersAttended++;
+
+        daysBreakdown[day] = {
+          date: dateStr,
+          lunchBooked,
+          lunchStatus: lunchAtt,
+          breakfastStatus: breakfastAtt,
+          dinnerStatus: dinnerAtt,
+        };
+      });
+
+      return {
+        id: sId,
+        name: stu.name,
+        room: stu.room || "N/A",
+        email: stu.email,
+        isBlocked: Boolean(stu.isBlocked),
+        isRedFlagged: Boolean(stu.isRedFlagged),
+        penaltyReason: stu.penaltyReason || "",
+        summary: {
+          totalLunchesBooked,
+          totalLunchesAttended,
+          totalLunchesMissed,
+          totalBreakfastsAttended,
+          totalDinnersAttended,
+        },
+        days: daysBreakdown,
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      weekStartDate: targetWeek,
+      weekEndDate: datesMap.fri,
+      totalStudents: students.length,
+      report,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};

@@ -2,7 +2,7 @@
 
 import { getDatabase } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
-import { getCurrentSaturday } from "./authActions";
+import { getCurrentSaturday, getSelectionSaturday } from "./authActions";
 import { logAuditEvent } from "@/lib/audit";
 
 export type DayKey = "sat" | "sun" | "mon" | "tue" | "wed" | "thu" | "fri";
@@ -79,15 +79,15 @@ export async function getGlobalLockStatusAction(): Promise<boolean> {
 
 /**
  * 3. Student Lunch Selection Action
+ * Enforces strict Friday-only selection window for the upcoming week cycle (Sat-Fri).
  */
 export async function selectStudentLunchAction(payload: {
   studentId: string;
   weekStartDate?: string;
   lunchSelections: Record<string, boolean>;
-  simulateFriday?: boolean;
 }): Promise<{ success: boolean; message: string }> {
   try {
-    const { studentId, lunchSelections, simulateFriday } = payload;
+    const { studentId, lunchSelections } = payload;
     if (!studentId) {
       return { success: false, message: "Student ID is required." };
     }
@@ -117,17 +117,17 @@ export async function selectStudentLunchAction(payload: {
       };
     }
 
-    // Validate Friday restriction (unless simulated or development)
-    const todayDay = new Date().getDay(); // 5 = Friday
-    const isFridayToday = todayDay === 5;
-    if (!isFridayToday && !simulateFriday) {
+    // Strict Friday-Only Enforcement (day 5)
+    const isFridayToday = new Date().getDay() === 5;
+    if (!isFridayToday) {
       return {
         success: false,
-        message: "Lunch selection can only be modified on FRIDAYS.",
+        message: "LUNCH LOCKED: Lunch selections can ONLY be submitted or modified on FRIDAYS for the upcoming week.",
       };
     }
 
-    const weekStart = payload.weekStartDate || (await getCurrentSaturday());
+    // Target week on Friday is strictly the UPCOMING week cycle (starts tomorrow, Saturday)
+    const weekStart = payload.weekStartDate || (await getSelectionSaturday());
 
     await db.collection("mealselections").updateOne(
       { studentId: studentObjId, weekStartDate: weekStart },
@@ -145,7 +145,7 @@ export async function selectStudentLunchAction(payload: {
 
     return {
       success: true,
-      message: "Weekly lunch preferences saved successfully in database.",
+      message: "Upcoming week lunch preferences saved successfully.",
     };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to update lunch selections in database.";
@@ -168,11 +168,23 @@ export async function getStudentSelectionAction(
   student?: StudentSelectionResult;
   selection?: WeeklySelectionData;
   isGlobalLocked: boolean;
+  isFriday: boolean;
+  targetWeekStartDate: string;
   message?: string;
 }> {
   try {
+    const isFriday = new Date().getDay() === 5;
+    const defaultWeek = isFriday ? await getSelectionSaturday() : await getCurrentSaturday();
+    const weekStart = weekStartDate || defaultWeek;
+
     if (!studentId) {
-      return { success: false, isGlobalLocked: false, message: "Student ID is required." };
+      return {
+        success: false,
+        isGlobalLocked: false,
+        isFriday,
+        targetWeekStartDate: weekStart,
+        message: "Student ID is required.",
+      };
     }
 
     const db = await getDatabase();
@@ -180,13 +192,18 @@ export async function getStudentSelectionAction(
     const student = await db.collection("users").findOne({ _id: studentObjId }, { projection: { password: 0 } });
 
     if (!student) {
-      return { success: false, isGlobalLocked: false, message: "Student not found." };
+      return {
+        success: false,
+        isGlobalLocked: false,
+        isFriday,
+        targetWeekStartDate: weekStart,
+        message: "Student not found.",
+      };
     }
 
     const config = await db.collection("systemconfigs").findOne({ key: "global_settings" });
     const isGlobalLocked = Boolean(config?.isGlobalLocked);
 
-    const weekStart = weekStartDate || (await getCurrentSaturday());
     const selectionDoc = await db.collection("mealselections").findOne({ studentId: studentObjId, weekStartDate: weekStart });
 
     const defaultLunchSelections: Record<string, boolean> = {
@@ -202,7 +219,7 @@ export async function getStudentSelectionAction(
     const finalSelection: WeeklySelectionData = {
       weekStartDate: weekStart,
       lunchSelections: (selectionDoc?.lunchSelections as Record<string, boolean>) || defaultLunchSelections,
-      isLocked: isGlobalLocked || Boolean(student.isBlocked),
+      isLocked: isGlobalLocked || Boolean(student.isBlocked) || !isFriday,
     };
 
     const studentResult: StudentSelectionResult = {
@@ -221,6 +238,8 @@ export async function getStudentSelectionAction(
       student: studentResult,
       selection: finalSelection,
       isGlobalLocked,
+      isFriday,
+      targetWeekStartDate: weekStart,
     };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to retrieve student meal selection.";
@@ -228,6 +247,8 @@ export async function getStudentSelectionAction(
     return {
       success: false,
       isGlobalLocked: false,
+      isFriday: new Date().getDay() === 5,
+      targetWeekStartDate: "",
       message,
     };
   }

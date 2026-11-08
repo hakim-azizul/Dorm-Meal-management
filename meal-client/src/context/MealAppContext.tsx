@@ -81,10 +81,14 @@ interface MealAppContextType {
   isHydrated: boolean;
   backendOnline: boolean;
 
+  // UI & Responsive Sidebar Controls
+  isSidebarOpen: boolean;
+  toggleSidebar: () => void;
+  closeSidebar: () => void;
+
   // Operating Day & System State
   systemDay: DayKey;
   setSystemDay: (day: DayKey) => void;
-  toggleFridaySimulation: () => void;
   isFriday: boolean;
   todayDateFormatted: string;
 
@@ -131,6 +135,10 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
   const [backendOnline] = useState<boolean>(true);
   const [systemDay, setSystemDay] = useState<DayKey>(getInitialDayKey);
   const [isGlobalLocked, setIsGlobalLocked] = useState<boolean>(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
+
+  const toggleSidebar = () => setIsSidebarOpen((prev) => !prev);
+  const closeSidebar = () => setIsSidebarOpen(false);
 
   const [students, setStudents] = useState<StudentRecord[]>([]);
   const [chefs, setChefs] = useState<ChefRecord[]>([]);
@@ -533,18 +541,9 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("meal_user_session");
   };
 
-  // Production Gating:
-  // In production, isFriday is strictly real Friday (getDay() === 5).
-  // In development, developer simulation toggle allows toggling between simulated Friday and normal day.
-  const isRealFriday = typeof window !== "undefined" ? new Date().getDay() === 5 : false;
-  const isProduction = process.env.NODE_ENV === "production";
-
-  const toggleFridaySimulation = () => {
-    if (isProduction) return; // Strictly locked in production
-    setSystemDay((prev) => (prev === "fri" ? "mon" : "fri"));
-  };
-
-  const isFriday = isProduction ? isRealFriday : systemDay === "fri";
+  // Strict Calendar Friday Check (Friday is day 5)
+  // Lunch selection is strictly restricted to real calendar Fridays for the upcoming week cycle.
+  const isFriday = typeof window !== "undefined" ? new Date().getDay() === 5 : false;
   
   const formattedToday = new Date().toLocaleDateString("en-US", {
     weekday: "long",
@@ -675,7 +674,6 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
       const res = await selectStudentLunchAction({
         studentId: activeStudent.id,
         lunchSelections: selectionsPayload,
-        simulateFriday: isFriday,
       });
 
       return res;
@@ -986,9 +984,11 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
         logout,
         isHydrated,
         backendOnline,
+        isSidebarOpen,
+        toggleSidebar,
+        closeSidebar,
         systemDay,
         setSystemDay,
-        toggleFridaySimulation,
         isFriday,
         todayDateFormatted,
         isGlobalLocked,

@@ -164,9 +164,8 @@ export async function getMySelection(
 
 export async function selectLunch(payload: {
   studentId: string;
-  weekStartDate: string;
+  weekStartDate?: string;
   lunchSelections: Record<string, boolean>;
-  simulateFriday?: boolean;
 }): Promise<ApiResponse> {
   return request<ApiResponse>("/meals/select", {
     method: "POST",

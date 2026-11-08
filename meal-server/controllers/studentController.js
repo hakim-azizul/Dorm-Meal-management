@@ -2,7 +2,11 @@ import { User } from "../models/User.js";
 import { MealSelection } from "../models/MealSelection.js";
 import { SystemConfig } from "../models/SystemConfig.js";
 
-// Helper: Get Saturday week start date string YYYY-MM-DD for any date
+/**
+ * Calculates the week start date (Saturday) for the current active operating week.
+ * - On Saturday (6): today
+ * - On Sun-Fri (0-5): past Saturday
+ */
 export const getCurrentWeekStartDate = (targetDate) => {
   const now = targetDate ? new Date(targetDate) : new Date();
   const day = now.getDay(); // 0 is Sun, 6 is Sat
@@ -10,6 +14,22 @@ export const getCurrentWeekStartDate = (targetDate) => {
   const saturday = new Date(now);
   saturday.setDate(now.getDate() + diffToSaturday);
   return saturday.toISOString().split("T")[0];
+};
+
+/**
+ * Calculates the target week start date (Saturday) for student meal selections:
+ * - On Friday (5): Selection window is open for the UPCOMING week cycle (starts tomorrow, Saturday).
+ * - On Sat-Thu (0-4, 6): Refers to the current active operating week.
+ */
+export const getSelectionWeekStartDate = (targetDate) => {
+  const now = targetDate ? new Date(targetDate) : new Date();
+  const day = now.getDay();
+  if (day === 5) {
+    const upcomingSat = new Date(now);
+    upcomingSat.setDate(now.getDate() + 1);
+    return upcomingSat.toISOString().split("T")[0];
+  }
+  return getCurrentWeekStartDate(now);
 };
 
 // GET /api/meals/my-selection
@@ -27,8 +47,11 @@ export const getMySelection = async (req, res) => {
 
     const config = await SystemConfig.findOne({ key: "global_settings" });
     const isGlobalLocked = config ? config.isGlobalLocked : false;
+    const isFriday = new Date().getDay() === 5;
 
-    const weekStartDate = req.query.weekStartDate || getCurrentWeekStartDate();
+    // On Friday, students view/select the UPCOMING week. Otherwise, current active week.
+    const defaultWeek = isFriday ? getSelectionWeekStartDate() : getCurrentWeekStartDate();
+    const weekStartDate = req.query.weekStartDate || defaultWeek;
     let selection = await MealSelection.findOne({ studentId, weekStartDate });
 
     if (!selection) {
@@ -39,12 +62,6 @@ export const getMySelection = async (req, res) => {
         isLocked: isGlobalLocked || user.isBlocked,
       };
     }
-
-    // Fixed breakfast and dinner details
-    const fixedMeals = {
-      breakfast: { fixed: true, note: "Standard continental breakfast included daily" },
-      dinner: { fixed: true, note: "Standard hot dinner meal included daily" },
-    };
 
     return res.status(200).json({
       success: true,
@@ -58,9 +75,9 @@ export const getMySelection = async (req, res) => {
         penaltyReason: user.penaltyReason,
       },
       isGlobalLocked,
-      isFriday: new Date().getDay() === 5,
+      isFriday,
+      weekStartDate,
       selection,
-      fixedMeals,
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -70,7 +87,7 @@ export const getMySelection = async (req, res) => {
 // POST /api/meals/select
 export const selectLunch = async (req, res) => {
   try {
-    const { studentId, weekStartDate, lunchSelections, simulateFriday } = req.body;
+    const { studentId, weekStartDate, lunchSelections } = req.body;
 
     if (!studentId || !lunchSelections) {
       return res.status(400).json({ success: false, message: "studentId and lunchSelections are required" });
@@ -98,20 +115,17 @@ export const selectLunch = async (req, res) => {
       });
     }
 
-    // 3. Validate Friday-Only Policy (getDay() === 5 is Friday)
+    // 3. Validate Strict Friday-Only Policy (getDay() === 5 is Friday)
     const isActuallyFriday = new Date().getDay() === 5;
-    const isDevMode = process.env.NODE_ENV === "development";
-    const isFridayEligible = isActuallyFriday || (isDevMode && simulateFriday === true);
-
-    if (!isFridayEligible) {
+    if (!isActuallyFriday) {
       return res.status(400).json({
         success: false,
-        message: "RESTRICTION: Lunch selection can ONLY be selected or modified on FRIDAYS.",
+        message: "RESTRICTION: Lunch selection can ONLY be modified on FRIDAYS for the upcoming week.",
       });
     }
 
-    // 4. Upsert Selection
-    const targetWeek = weekStartDate || getCurrentWeekStartDate();
+    // 4. Upsert Selection strictly for the upcoming week cycle
+    const targetWeek = weekStartDate || getSelectionWeekStartDate();
     const updated = await MealSelection.findOneAndUpdate(
       { studentId, weekStartDate: targetWeek },
       {
@@ -125,7 +139,7 @@ export const selectLunch = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Lunch preferences updated successfully.",
+      message: "Upcoming week lunch preferences saved successfully.",
       data: updated,
     });
   } catch (error) {
