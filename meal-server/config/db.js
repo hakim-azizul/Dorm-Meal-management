@@ -1,9 +1,12 @@
 import mongoose from "mongoose";
 
 export const connectDB = async () => {
-  const uri =
-    process.env.MONGODB_URI ||
-    `mongodb://${process.env.DB_USER}:${process.env.DB_PASS}@ac-vwgi4dy-shard-00-00.yleslu4.mongodb.net:27017,ac-vwgi4dy-shard-00-01.yleslu4.mongodb.net:27017,ac-vwgi4dy-shard-00-02.yleslu4.mongodb.net:27017/weekly-meal?ssl=true&replicaSet=atlas-ydwn0o-shard-0&authSource=admin`;
+  const uri = process.env.MONGODB_URI;
+
+  if (!uri) {
+    console.error("MongoDB connection error: MONGODB_URI environment variable is not defined.");
+    return null;
+  }
 
   try {
     const conn = await mongoose.connect(uri);

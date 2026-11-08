@@ -116,7 +116,7 @@ The platform operates across two concurrent delivery models:
 
 ### 2.1 Cryptographic Token Standards & Secrets
 - **Algorithm**: HMAC SHA-256 (`HS256`).
-- **Signature Secret**: Configured through `JWT_SECRET` in both environment tiers. Fallback secret: `super_secret_hostel_meal_jwt_key_2026_production_safe`.
+- **Signature Secret**: Configured strictly through the `JWT_SECRET` environment variable in both environment tiers (minimum 32-character high-entropy cryptographic secret). In production, fallback defaults are forbidden.
 - **Token Duration**: Exactly 7 days (`7d` / `604800` seconds).
 - **Libraries**:
   - `meal-client`: `jose` (`SignJWT`, `jwtVerify`) for zero-dependency edge runtime compatibility.
@@ -678,10 +678,10 @@ Mounted in `src/app/providers.tsx` in strict sequence:
 ### 8.1 `meal-client/.env`
 ```ini
 # Secret used by jose to sign and verify session JWT cookies
-JWT_SECRET=super_secret_hostel_meal_jwt_key_2026_production_safe
+JWT_SECRET=<your_strong_jwt_secret_min_32_characters>
 
 # MongoDB Atlas connection string for Direct Server Actions
-DB_URL=mongodb://weekly-meal:VpQhmt1QqG0mU55K@ac-vwgi4dy-shard-00-00.yleslu4.mongodb.net:27017,ac-vwgi4dy-shard-00-01.yleslu4.mongodb.net:27017,ac-vwgi4dy-shard-00-02.yleslu4.mongodb.net:27017/?ssl=true&replicaSet=atlas-ydwn0o-shard-0&authSource=admin
+DB_URL=mongodb+srv://<db_username>:<db_password>@<cluster-host>/weekly-meal?retryWrites=true&w=majority
 
 # Base URL for Express Backend REST services
 NEXT_PUBLIC_API_URL=http://localhost:5000/api
@@ -693,14 +693,14 @@ NEXT_PUBLIC_API_URL=http://localhost:5000/api
 PORT=5000
 
 # MongoDB Atlas credentials and connection string
-DB_USER=weekly-meal
-DB_PASS=VpQhmt1QqG0mU55K
-MONGODB_URI=mongodb://weekly-meal:VpQhmt1QqG0mU55K@ac-vwgi4dy-shard-00-00.yleslu4.mongodb.net:27017,ac-vwgi4dy-shard-00-01.yleslu4.mongodb.net:27017,ac-vwgi4dy-shard-00-02.yleslu4.mongodb.net:27017/?ssl=true&replicaSet=atlas-ydwn0o-shard-0&authSource=admin
+DB_USER=<db_username>
+DB_PASS=<db_password>
+MONGODB_URI=mongodb+srv://<db_username>:<db_password>@<cluster-host>/weekly-meal?retryWrites=true&w=majority
 
 # JWT signing secret matching meal-client
-JWT_SECRET=super_secret_hostel_meal_jwt_key_2026_production_safe
+JWT_SECRET=<your_strong_jwt_secret_min_32_characters>
 
-# Setting to development enables simulateFriday bypass for meal selections
+# Environment mode ('development' or 'production')
 NODE_ENV=development
 ```
 
