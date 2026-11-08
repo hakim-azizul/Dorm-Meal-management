@@ -1,17 +1,20 @@
 import { getDatabase } from "@/lib/mongodb";
 import { cookies } from "next/headers";
+import { verifyJwtToken } from "@/lib/auth";
+
+export interface AuditLogActor {
+  id?: string;
+  email?: string;
+  role?: string;
+  name?: string;
+}
 
 export interface AuditLogEntry {
   action: string;
-  performedBy: {
-    id?: string;
-    email?: string;
-    role?: string;
-    name?: string;
-  };
+  performedBy: AuditLogActor;
   targetId?: string;
   targetEmail?: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
   timestamp: Date;
 }
 
@@ -22,8 +25,8 @@ export async function logAuditEvent(entry: {
   action: string;
   targetId?: string;
   targetEmail?: string;
-  details?: Record<string, any>;
-  performedBy?: { id?: string; email?: string; role?: string; name?: string };
+  details?: Record<string, unknown>;
+  performedBy?: AuditLogActor;
 }) {
   try {
     const db = await getDatabase();
@@ -34,13 +37,15 @@ export async function logAuditEvent(entry: {
         const cookieStore = await cookies();
         const sessionCookie = cookieStore.get("meal_session");
         if (sessionCookie?.value) {
-          const session = JSON.parse(sessionCookie.value);
-          actor = {
-            id: session.id,
-            email: session.email,
-            role: session.role,
-            name: session.name,
-          };
+          const verified = await verifyJwtToken(sessionCookie.value);
+          if (verified) {
+            actor = {
+              id: verified.id,
+              email: verified.email,
+              role: verified.role,
+              name: verified.name,
+            };
+          }
         }
       } catch {
         // Fallback actor if outside cookie context
@@ -79,8 +84,10 @@ export async function checkRateLimit(email: string): Promise<{ isBlocked: boolea
 
     const now = Date.now();
 
-    if (record.lockedUntil && new Date(record.lockedUntil).getTime() > now) {
-      const remainingMinutes = Math.ceil((new Date(record.lockedUntil).getTime() - now) / 60000);
+    if (record.lockedUntil && new Date(record.lockedUntil as string | number | Date).getTime() > now) {
+      const remainingMinutes = Math.ceil(
+        (new Date(record.lockedUntil as string | number | Date).getTime() - now) / 60000
+      );
       return {
         isBlocked: true,
         message: `Too many failed login attempts. Account temporarily locked for security. Please try again in ${remainingMinutes} minute(s).`,
@@ -88,7 +95,7 @@ export async function checkRateLimit(email: string): Promise<{ isBlocked: boolea
     }
 
     // Reset expired lockout
-    if (record.lockedUntil && new Date(record.lockedUntil).getTime() <= now) {
+    if (record.lockedUntil && new Date(record.lockedUntil as string | number | Date).getTime() <= now) {
       await db.collection("login_attempts").deleteOne({ email });
       return { isBlocked: false };
     }
@@ -111,7 +118,7 @@ export async function recordFailedLoginAttempt(
     const now = new Date();
 
     const existing = await db.collection("login_attempts").findOne({ email });
-    const currentAttempts = (existing?.attempts || 0) + 1;
+    const currentAttempts = ((existing?.attempts as number) || 0) + 1;
 
     if (currentAttempts >= MAX_LOGIN_ATTEMPTS) {
       const lockedUntil = new Date(Date.now() + LOCKOUT_WINDOW_MS);

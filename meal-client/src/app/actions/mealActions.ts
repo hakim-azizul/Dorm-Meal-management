@@ -7,6 +7,23 @@ import { logAuditEvent } from "@/lib/audit";
 
 export type DayKey = "sat" | "sun" | "mon" | "tue" | "wed" | "thu" | "fri";
 
+export interface StudentSelectionResult {
+  id: string;
+  name: string;
+  email: string;
+  room?: string;
+  isBlocked: boolean;
+  penaltyReason?: string;
+  isRedFlagged: boolean;
+  isPasswordReset: boolean;
+}
+
+export interface WeeklySelectionData {
+  weekStartDate: string;
+  lunchSelections: Record<string, boolean>;
+  isLocked: boolean;
+}
+
 /**
  * 1. Global Lock Toggle Action
  */
@@ -17,7 +34,7 @@ export async function toggleGlobalLockAction(
     const db = await getDatabase();
     const config = await db.collection("systemconfigs").findOne({ key: "global_settings" });
 
-    let nextLock = typeof isLocked === "boolean" ? isLocked : !config?.isGlobalLocked;
+    const nextLock = typeof isLocked === "boolean" ? isLocked : !config?.isGlobalLocked;
 
     await db.collection("systemconfigs").updateOne(
       { key: "global_settings" },
@@ -36,12 +53,13 @@ export async function toggleGlobalLockAction(
       isGlobalLocked: nextLock,
       message: `Global selection lock is now ${nextLock ? "ACTIVATED (Locked)" : "DEACTIVATED (Unlocked)"}.`,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to update global lock in database.";
     console.error("toggleGlobalLockAction error:", error);
     return {
       success: false,
       isGlobalLocked: false,
-      message: error.message || "Failed to update global lock in database.",
+      message,
     };
   }
 }
@@ -53,7 +71,7 @@ export async function getGlobalLockStatusAction(): Promise<boolean> {
   try {
     const db = await getDatabase();
     const config = await db.collection("systemconfigs").findOne({ key: "global_settings" });
-    return !!config?.isGlobalLocked;
+    return Boolean(config?.isGlobalLocked);
   } catch {
     return false;
   }
@@ -86,7 +104,7 @@ export async function selectStudentLunchAction(payload: {
     if (student.isBlocked) {
       return {
         success: false,
-        message: `Meal selection is suspended: ${student.penaltyReason || "Disciplinary hold active"}.`,
+        message: `Meal selection is suspended: ${(student.penaltyReason as string) || "Disciplinary hold active"}.`,
       };
     }
 
@@ -129,11 +147,12 @@ export async function selectStudentLunchAction(payload: {
       success: true,
       message: "Weekly lunch preferences saved successfully in database.",
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to update lunch selections in database.";
     console.error("selectStudentLunchAction error:", error);
     return {
       success: false,
-      message: error.message || "Failed to update lunch selections in database.",
+      message,
     };
   }
 }
@@ -146,8 +165,8 @@ export async function getStudentSelectionAction(
   weekStartDate?: string
 ): Promise<{
   success: boolean;
-  student?: any;
-  selection?: any;
+  student?: StudentSelectionResult;
+  selection?: WeeklySelectionData;
   isGlobalLocked: boolean;
   message?: string;
 }> {
@@ -165,42 +184,51 @@ export async function getStudentSelectionAction(
     }
 
     const config = await db.collection("systemconfigs").findOne({ key: "global_settings" });
-    const isGlobalLocked = !!config?.isGlobalLocked;
+    const isGlobalLocked = Boolean(config?.isGlobalLocked);
 
     const weekStart = weekStartDate || (await getCurrentSaturday());
     const selectionDoc = await db.collection("mealselections").findOne({ studentId: studentObjId, weekStartDate: weekStart });
 
-    const finalSelection = selectionDoc || {
+    const defaultLunchSelections: Record<string, boolean> = {
+      sat: true,
+      sun: true,
+      mon: true,
+      tue: true,
+      wed: true,
+      thu: true,
+      fri: false,
+    };
+
+    const finalSelection: WeeklySelectionData = {
       weekStartDate: weekStart,
-      lunchSelections: { sat: true, sun: true, mon: true, tue: true, wed: true, thu: true, fri: false },
-      isLocked: isGlobalLocked || student.isBlocked,
+      lunchSelections: (selectionDoc?.lunchSelections as Record<string, boolean>) || defaultLunchSelections,
+      isLocked: isGlobalLocked || Boolean(student.isBlocked),
+    };
+
+    const studentResult: StudentSelectionResult = {
+      id: student._id.toString(),
+      name: (student.name as string) || "",
+      email: (student.email as string) || "",
+      room: student.room as string | undefined,
+      isBlocked: Boolean(student.isBlocked),
+      penaltyReason: student.penaltyReason as string | undefined,
+      isRedFlagged: Boolean(student.isRedFlagged),
+      isPasswordReset: student.isPasswordReset ?? false,
     };
 
     return {
       success: true,
-      student: {
-        id: student._id.toString(),
-        name: student.name,
-        email: student.email,
-        room: student.room,
-        isBlocked: !!student.isBlocked,
-        penaltyReason: student.penaltyReason,
-        isRedFlagged: !!student.isRedFlagged,
-        isPasswordReset: student.isPasswordReset ?? false,
-      },
-      selection: {
-        weekStartDate: finalSelection.weekStartDate,
-        lunchSelections: finalSelection.lunchSelections,
-        isLocked: !!finalSelection.isLocked,
-      },
+      student: studentResult,
+      selection: finalSelection,
       isGlobalLocked,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to retrieve student meal selection.";
     console.error("getStudentSelectionAction error:", error);
     return {
       success: false,
       isGlobalLocked: false,
-      message: error.message || "Failed to retrieve student meal selection.",
+      message,
     };
   }
 }
@@ -240,8 +268,9 @@ export async function toggleStudentBlockAction(payload: {
       success: true,
       message: `Student meal privileges ${isBlocked ? "BLOCKED" : "UNBLOCKED"} successfully.`,
     };
-  } catch (error: any) {
-    return { success: false, message: error.message || "Failed to update student penalty status." };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to update student penalty status.";
+    return { success: false, message };
   }
 }
 
@@ -260,7 +289,7 @@ export async function adminOverrideLunchAction(payload: {
     const weekStart = await getCurrentSaturday();
 
     const record = await db.collection("mealselections").findOne({ studentId: studentObjId, weekStartDate: weekStart });
-    const currentVal = record?.lunchSelections?.[day] ?? true;
+    const currentVal = Boolean(record?.lunchSelections?.[day] ?? true);
     const newVal = typeof payload.selected === "boolean" ? payload.selected : !currentVal;
 
     await db.collection("mealselections").updateOne(
@@ -285,8 +314,9 @@ export async function adminOverrideLunchAction(payload: {
       success: true,
       message: `Lunch override applied for ${day.toUpperCase()}: ${newVal ? "Selected" : "Opted-out"}.`,
     };
-  } catch (error: any) {
-    return { success: false, message: error.message || "Failed to override student meal." };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to override student meal.";
+    return { success: false, message };
   }
 }
 
@@ -332,7 +362,8 @@ export async function checkInStudentAction(payload: {
       success: true,
       message: `Attendance recorded as ${status.toUpperCase()} for ${mealType}.`,
     };
-  } catch (error: any) {
-    return { success: false, message: error.message || "Failed to update attendance." };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to update attendance.";
+    return { success: false, message };
   }
 }

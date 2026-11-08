@@ -18,7 +18,6 @@ import {
   LogOut,
   Menu,
   X,
-  User,
   KeyRound,
 } from "lucide-react";
 

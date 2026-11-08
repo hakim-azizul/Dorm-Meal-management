@@ -179,25 +179,24 @@ interface LanguageContextType {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [language, setLanguageState] = useState<Language>("en");
+  const [language, setLanguageState] = useState<Language>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("meal_lang") as Language;
+      if (saved === "en" || saved === "ar") return saved;
+    }
+    return "en";
+  });
 
   useEffect(() => {
-    const saved = localStorage.getItem("meal_lang") as Language;
-    if (saved === "en" || saved === "ar") {
-      setLanguageState(saved);
-      document.documentElement.dir = saved === "ar" ? "rtl" : "ltr";
-      document.documentElement.lang = saved;
-    } else {
-      document.documentElement.dir = "ltr";
-      document.documentElement.lang = "en";
-    }
-  }, []);
+    document.documentElement.dir = language === "ar" ? "rtl" : "ltr";
+    document.documentElement.lang = language;
+  }, [language]);
 
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);
-    localStorage.setItem("meal_lang", lang);
-    document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
-    document.documentElement.lang = lang;
+    if (typeof window !== "undefined") {
+      localStorage.setItem("meal_lang", lang);
+    }
   };
 
   const dir = language === "ar" ? "rtl" : "ltr";

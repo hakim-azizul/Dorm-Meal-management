@@ -10,6 +10,7 @@ import {
   clearFailedLoginAttempts,
   logAuditEvent,
 } from "@/lib/audit";
+import { signJwtToken, verifyJwtToken, SessionPayload } from "@/lib/auth";
 
 export type Role = "student" | "admin" | "chef";
 
@@ -30,6 +31,7 @@ export interface LoginActionResult {
   success: boolean;
   role?: Role;
   user?: UserSessionData;
+  token?: string;
   message?: string;
 }
 
@@ -37,6 +39,21 @@ export interface CreateUserActionResult {
   success: boolean;
   message: string;
   user?: UserSessionData;
+}
+
+export interface UserListItem {
+  _id: string;
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  room?: string;
+  shift?: string;
+  isBlocked?: boolean;
+  penaltyReason?: string;
+  isRedFlagged?: boolean;
+  isPasswordReset?: boolean;
+  createdAt?: string | Date;
 }
 
 const DEFAULT_PASSWORD = "Dorm@1234";
@@ -52,7 +69,7 @@ export async function getCurrentSaturday(): Promise<string> {
 }
 
 /**
- * Direct Database Login Action using Next.js Server Actions
+ * Direct Database Login Action using Next.js Server Actions with JWT Signing
  */
 export async function loginAction(
   emailInput: string,
@@ -102,7 +119,7 @@ export async function loginAction(
       };
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const isPasswordValid = await bcrypt.compare(password, user.password as string);
     if (!isPasswordValid) {
       const fail = await recordFailedLoginAttempt(email);
       if (fail.isNowLocked) {
@@ -125,21 +142,24 @@ export async function loginAction(
 
     const userSession: UserSessionData = {
       id: user._id.toString(),
-      name: user.name || "User",
-      email: user.email,
+      name: (user.name as string) || "User",
+      email: user.email as string,
       role: user.role as Role,
-      room: user.room,
-      shift: user.shift,
-      isBlocked: !!user.isBlocked,
-      penaltyReason: user.penaltyReason,
-      isRedFlagged: !!user.isRedFlagged,
+      room: user.room as string | undefined,
+      shift: user.shift as string | undefined,
+      isBlocked: Boolean(user.isBlocked),
+      penaltyReason: user.penaltyReason as string | undefined,
+      isRedFlagged: Boolean(user.isRedFlagged),
       isPasswordReset: user.isPasswordReset ?? false,
     };
+
+    // 3. Cryptographically Sign JWT Token
+    const token = await signJwtToken(userSession as SessionPayload);
 
     // Set server-side session cookie for edge middleware and SSR route protection
     try {
       const cookieStore = await cookies();
-      cookieStore.set("meal_session", JSON.stringify(userSession), {
+      cookieStore.set("meal_session", token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
@@ -154,13 +174,15 @@ export async function loginAction(
       success: true,
       role: user.role as Role,
       user: userSession,
+      token,
       message: "Login successful.",
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMsg = error instanceof Error ? error.message : "Unable to connect to authentication service.";
     console.error("Direct MongoDB Login Action Error:", error);
     return {
       success: false,
-      message: "Unable to connect to the authentication service. Please try again.",
+      message: errorMsg,
     };
   }
 }
@@ -179,14 +201,29 @@ export async function logoutAction(): Promise<{ success: boolean }> {
 }
 
 /**
- * Direct Database Action to Get Current Session from server-side cookie
+ * Direct Database Action to Get Current Session by verifying JWT from cookie
  */
 export async function getSessionAction(): Promise<UserSessionData | null> {
   try {
     const cookieStore = await cookies();
     const sessionCookie = cookieStore.get("meal_session");
     if (!sessionCookie?.value) return null;
-    return JSON.parse(sessionCookie.value) as UserSessionData;
+
+    const verified = await verifyJwtToken(sessionCookie.value);
+    if (!verified) return null;
+
+    return {
+      id: verified.id,
+      name: verified.name,
+      email: verified.email,
+      role: verified.role,
+      room: verified.room,
+      shift: verified.shift,
+      isBlocked: verified.isBlocked,
+      penaltyReason: verified.penaltyReason,
+      isRedFlagged: verified.isRedFlagged,
+      isPasswordReset: verified.isPasswordReset,
+    };
   } catch {
     return null;
   }
@@ -194,7 +231,7 @@ export async function getSessionAction(): Promise<UserSessionData | null> {
 
 /**
  * Direct Database Action for User to Update / Change Their Password
- * Securely hashes new password with bcryptjs and flips isPasswordReset to false
+ * Securely hashes new password with bcryptjs, flips isPasswordReset to false, and updates JWT cookie
  */
 export async function updatePasswordAction(payload: {
   userId: string;
@@ -222,7 +259,7 @@ export async function updatePasswordAction(payload: {
 
     // If current password provided, verify it
     if (currentPassword && user.password) {
-      const isMatch = await bcrypt.compare(currentPassword, user.password);
+      const isMatch = await bcrypt.compare(currentPassword, user.password as string);
       if (!isMatch) {
         return { success: false, message: "Current password does not match our records." };
       }
@@ -245,24 +282,24 @@ export async function updatePasswordAction(payload: {
       }
     );
 
-    // Update session cookie if active
+    // Update JWT session cookie
     try {
       const cookieStore = await cookies();
-      const existingCookie = cookieStore.get("meal_session");
-      if (existingCookie?.value) {
-        const parsed = JSON.parse(existingCookie.value);
-        if (parsed.id === userId) {
-          cookieStore.set(
-            "meal_session",
-            JSON.stringify({ ...parsed, isPasswordReset: false }),
-            {
-              httpOnly: true,
-              secure: process.env.NODE_ENV === "production",
-              sameSite: "lax",
-              path: "/",
-              maxAge: 60 * 60 * 24 * 7,
-            }
-          );
+      const sessionCookie = cookieStore.get("meal_session");
+      if (sessionCookie?.value) {
+        const verified = await verifyJwtToken(sessionCookie.value);
+        if (verified && verified.id === userId) {
+          const updatedToken = await signJwtToken({
+            ...verified,
+            isPasswordReset: false,
+          });
+          cookieStore.set("meal_session", updatedToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax",
+            path: "/",
+            maxAge: 60 * 60 * 24 * 7,
+          });
         }
       }
     } catch {
@@ -273,11 +310,12 @@ export async function updatePasswordAction(payload: {
       success: true,
       message: "Password updated successfully. Default password is no longer active.",
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMsg = error instanceof Error ? error.message : "Failed to update password in database.";
     console.error("Direct MongoDB updatePasswordAction Error:", error);
     return {
       success: false,
-      message: error.message || "Failed to update password in database.",
+      message: errorMsg,
     };
   }
 }
@@ -319,7 +357,21 @@ export async function createUserAction(payload: {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(DEFAULT_PASSWORD, salt);
 
-    const doc: any = {
+    interface NewUserDoc {
+      name: string;
+      email: string;
+      password: string;
+      role: Role;
+      room?: string;
+      shift?: string;
+      isPasswordReset: boolean;
+      isBlocked: boolean;
+      isRedFlagged: boolean;
+      createdAt: Date;
+      updatedAt: Date;
+    }
+
+    const doc: NewUserDoc = {
       name,
       email,
       password: hashedPassword,
@@ -385,11 +437,12 @@ export async function createUserAction(payload: {
       message: `${role === "chef" ? "Chef" : "Student"} account created successfully with default password "Dorm@1234".`,
       user: createdUser,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMsg = error instanceof Error ? error.message : "Failed to create user in database.";
     console.error("Direct MongoDB Create User Error:", error);
     return {
       success: false,
-      message: error.message || "Failed to create user in database.",
+      message: errorMsg,
     };
   }
 }
@@ -411,13 +464,14 @@ export async function deleteUserAction(userId: string): Promise<{ success: boole
     await logAuditEvent({
       action: "DELETE_USER",
       targetId: userId,
-      targetEmail: existing?.email,
+      targetEmail: existing?.email as string | undefined,
       details: { name: existing?.name, role: existing?.role },
     });
 
     return { success: true, message: "User deleted successfully." };
-  } catch (error: any) {
-    return { success: false, message: error.message || "Failed to delete user." };
+  } catch (error: unknown) {
+    const errorMsg = error instanceof Error ? error.message : "Failed to delete user.";
+    return { success: false, message: errorMsg };
   }
 }
 
@@ -447,20 +501,21 @@ export async function resetPasswordAction(userId: string): Promise<{ success: bo
     await logAuditEvent({
       action: "RESET_PASSWORD",
       targetId: userId,
-      targetEmail: targetUser?.email,
+      targetEmail: targetUser?.email as string | undefined,
       details: { defaultPasswordRestored: true, userName: targetUser?.name },
     });
 
     return { success: true, message: `Password reset to "${DEFAULT_PASSWORD}".` };
-  } catch (error: any) {
-    return { success: false, message: error.message || "Failed to reset password." };
+  } catch (error: unknown) {
+    const errorMsg = error instanceof Error ? error.message : "Failed to reset password.";
+    return { success: false, message: errorMsg };
   }
 }
 
 /**
  * Direct Database Action to Fetch all Users
  */
-export async function getAllUsersAction(): Promise<{ success: boolean; users: any[] }> {
+export async function getAllUsersAction(): Promise<{ success: boolean; users: UserListItem[] }> {
   try {
     const db = await getDatabase();
     const users = await db
@@ -472,12 +527,21 @@ export async function getAllUsersAction(): Promise<{ success: boolean; users: an
     return {
       success: true,
       users: users.map((u) => ({
-        ...u,
         _id: u._id.toString(),
         id: u._id.toString(),
+        name: (u.name as string) || "",
+        email: (u.email as string) || "",
+        role: (u.role as Role) || "student",
+        room: u.room as string | undefined,
+        shift: u.shift as string | undefined,
+        isBlocked: Boolean(u.isBlocked),
+        penaltyReason: u.penaltyReason as string | undefined,
+        isRedFlagged: Boolean(u.isRedFlagged),
+        isPasswordReset: u.isPasswordReset ?? false,
+        createdAt: (u.createdAt as Date) || undefined,
       })),
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Direct MongoDB getAllUsersAction Error:", error);
     return { success: false, users: [] };
   }

@@ -1,17 +1,14 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { verifyJwtToken, SessionPayload } from "@/lib/auth";
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const sessionCookie = request.cookies.get("meal_session");
 
-  let sessionUser: { id: string; role: "student" | "admin" | "chef"; email: string } | null = null;
+  let sessionUser: SessionPayload | null = null;
   if (sessionCookie?.value) {
-    try {
-      sessionUser = JSON.parse(sessionCookie.value);
-    } catch {
-      sessionUser = null;
-    }
+    sessionUser = await verifyJwtToken(sessionCookie.value);
   }
 
   // 1. Root /dashboard redirect

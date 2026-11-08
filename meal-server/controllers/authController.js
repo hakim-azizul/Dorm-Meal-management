@@ -1,5 +1,6 @@
 import { User } from "../models/User.js";
 import bcrypt from "bcryptjs";
+import { generateToken } from "../middleware/auth.js";
 
 // POST /api/auth/login
 export const login = async (req, res) => {
@@ -19,14 +20,21 @@ export const login = async (req, res) => {
       return res.status(401).json({ success: false, message: "Invalid email or password" });
     }
 
-    const userObj = user.toObject();
-    delete userObj.password;
+    const tokenPayload = {
+      id: user._id.toString(),
+      email: user.email,
+      role: user.role,
+      name: user.name,
+    };
+
+    const token = generateToken(tokenPayload, "7d");
 
     return res.status(200).json({
       success: true,
       message: "Login successful",
+      token,
       user: {
-        id: user._id,
+        id: user._id.toString(),
         name: user.name,
         email: user.email,
         role: user.role,
@@ -47,7 +55,9 @@ export const login = async (req, res) => {
 export const changePassword = async (req, res) => {
   try {
     const { userId, currentPassword, newPassword } = req.body;
-    if (!userId || !newPassword) {
+    const targetUserId = userId || req.user?.id;
+
+    if (!targetUserId || !newPassword) {
       return res.status(400).json({ success: false, message: "User ID and new password are required" });
     }
 
@@ -55,7 +65,7 @@ export const changePassword = async (req, res) => {
       return res.status(400).json({ success: false, message: "Password must be at least 6 characters long" });
     }
 
-    const user = await User.findById(userId);
+    const user = await User.findById(targetUserId);
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
@@ -70,14 +80,14 @@ export const changePassword = async (req, res) => {
 
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(newPassword, salt);
-    user.isPasswordReset = false; // Successfully updated their personal password!
+    user.isPasswordReset = false;
     await user.save();
 
     return res.status(200).json({
       success: true,
       message: "Password updated successfully.",
       user: {
-        id: user._id,
+        id: user._id.toString(),
         name: user.name,
         email: user.email,
         role: user.role,
@@ -92,7 +102,7 @@ export const changePassword = async (req, res) => {
 // GET /api/auth/me/:userId
 export const getProfile = async (req, res) => {
   try {
-    const { userId } = req.params;
+    const userId = req.params.userId || req.user?.id;
     const user = await User.findById(userId).select("-password");
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found" });
@@ -101,7 +111,7 @@ export const getProfile = async (req, res) => {
     return res.status(200).json({
       success: true,
       user: {
-        id: user._id,
+        id: user._id.toString(),
         name: user.name,
         email: user.email,
         role: user.role,

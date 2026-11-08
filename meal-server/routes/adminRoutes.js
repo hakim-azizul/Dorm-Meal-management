@@ -8,8 +8,12 @@ import {
   resetUserPassword,
   deleteUser,
 } from "../controllers/adminController.js";
+import { verifyToken, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
+
+// Enforce admin-only authentication for all admin routes
+router.use(verifyToken, requireRole("admin"));
 
 // POST /api/admin/toggle-global-lock
 router.post("/toggle-global-lock", toggleGlobalLock);

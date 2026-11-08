@@ -3,14 +3,13 @@
 import React, { useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useMealApp, DayKey } from "@/context/MealAppContext";
+import { AlertBanner } from "@/components/ui/AlertBanner";
+import { DatabaseStatusBadge } from "@/components/ui/DatabaseStatusBadge";
 import {
   GraduationCap,
-  Calendar,
   Lock,
-  Unlock,
   AlertTriangle,
   CheckCircle2,
-  XCircle,
   Coffee,
   Sun,
   Moon,
@@ -18,8 +17,6 @@ import {
   ShieldAlert,
   Info,
   CalendarDays,
-  Wifi,
-  WifiOff,
 } from "lucide-react";
 
 export default function StudentDashboard() {
@@ -51,8 +48,9 @@ export default function StudentDashboard() {
       } else {
         setNotification({ type: "error", text: res.message });
       }
-    } catch (err: any) {
-      setNotification({ type: "error", text: err.message || "Failed to update lunch selection" });
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : "Failed to update lunch selection";
+      setNotification({ type: "error", text: errorMsg });
     } finally {
       setIsUpdating(false);
       setTimeout(() => setNotification(null), 4000);
@@ -85,7 +83,7 @@ export default function StudentDashboard() {
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-2xl sm:text-3xl font-black text-base-content">
-                {currentUser?.name || "Ahmed Al-Mansoor"}
+                {currentUser?.name || "Student Resident"}
               </h1>
               {isStudentBlocked ? (
                 <span className="badge badge-error gap-1 text-xs font-bold py-2.5 px-3 text-white">
@@ -105,16 +103,10 @@ export default function StudentDashboard() {
               )}
 
               {/* Database Connection Indicator */}
-              <span
-                className="badge badge-xs font-bold gap-1 py-2 px-2.5 badge-success badge-outline text-emerald-600"
-                title="Connected to MongoDB Atlas Database"
-              >
-                <Wifi className="w-3 h-3" />
-                <span>Database Online</span>
-              </span>
+              <DatabaseStatusBadge />
             </div>
             <p className="text-xs sm:text-sm text-base-content/70 mt-1">
-              {t("room")}: <strong className="text-base-content">{currentUser?.room || "A-204"}</strong> • {currentUser?.email}
+              {t("room")}: <strong className="text-base-content">{currentUser?.room || "Room Unassigned"}</strong> • {currentUser?.email}
             </p>
           </div>
         </div>
@@ -152,70 +144,46 @@ export default function StudentDashboard() {
         </div>
       </div>
 
-      {/* REAL-TIME WARNING BANNER 1: Disciplinary Punishment / Admin Block */}
+      {/* Disciplinary Punishment / Admin Block Banner */}
       {isStudentBlocked && (
-        <div className="alert alert-error mb-6 shadow-md border border-rose-300">
-          <ShieldAlert className="w-6 h-6 shrink-0 text-white" />
-          <div className="text-white">
-            <h3 className="font-bold text-sm sm:text-base">
-              {t("punishmentAlertTitle")}
-            </h3>
-            <p className="text-xs sm:text-sm mt-0.5 opacity-90">
-              {t("punishmentAlertMsg")}
-            </p>
-            {currentUser?.penaltyReason && (
-              <div className="mt-1.5 text-xs font-semibold bg-white/10 px-2.5 py-1 rounded-lg w-fit">
-                Notice: {currentUser.penaltyReason}
-              </div>
-            )}
-          </div>
-        </div>
+        <AlertBanner
+          type="error"
+          title="Meal Privileges Suspended"
+          message={`Your lunch selection privileges have been suspended by the administration. ${
+            currentUser?.penaltyReason ? `Reason: ${currentUser.penaltyReason}` : ""
+          }`}
+          icon={<ShieldAlert className="w-6 h-6 shrink-0 text-white" />}
+        />
       )}
 
-      {/* REAL-TIME WARNING BANNER 2: Red-Flagged Attendance Status */}
+      {/* Red-Flagged Attendance Status Banner */}
       {currentUser?.isRedFlagged && (
-        <div className="alert alert-error mb-6 shadow-md border border-rose-400 bg-rose-600 text-white">
-          <AlertTriangle className="w-6 h-6 shrink-0 animate-bounce" />
-          <div>
-            <h3 className="font-bold text-sm sm:text-base">
-              {t("redFlagAlertTitle")}
-            </h3>
-            <p className="text-xs sm:text-sm mt-0.5 opacity-95">
-              {t("redFlagAlertMsg")}
-            </p>
-          </div>
-        </div>
+        <AlertBanner
+          type="error"
+          title="Absence Warning Active"
+          message="You missed a previously scheduled lunch. Please check in with the chef during your next meal to clear your account flag."
+          icon={<AlertTriangle className="w-6 h-6 shrink-0 animate-bounce" />}
+          className="bg-rose-600 text-white"
+        />
       )}
 
-      {/* REAL-TIME WARNING BANNER 3: Admin Global Lock */}
+      {/* Admin Global Lock Banner */}
       {isGlobalLocked && (
-        <div className="alert alert-warning mb-6 shadow-md border border-amber-300">
-          <Lock className="w-6 h-6 shrink-0 text-amber-900" />
-          <div>
-            <h3 className="font-bold text-sm sm:text-base">{t("globalLockAlertTitle")}</h3>
-            <p className="text-xs sm:text-sm mt-0.5 text-amber-900">
-              {t("globalLockAlertMsg")}
-            </p>
-          </div>
-        </div>
+        <AlertBanner
+          type="warning"
+          title="Global Administrative Lock"
+          message="All meal selections are currently frozen by hostel administration. Weekly choices cannot be modified at this time."
+          icon={<Lock className="w-6 h-6 shrink-0 text-amber-900" />}
+        />
       )}
 
       {/* Interactive Notification Alert */}
       {notification && (
-        <div
-          className={`alert mb-6 shadow-md transition-all ${
-            notification.type === "success"
-              ? "alert-success text-success-content"
-              : "alert-error text-white"
-          }`}
-        >
-          {notification.type === "success" ? (
-            <CheckCircle2 className="w-5 h-5 shrink-0" />
-          ) : (
-            <AlertTriangle className="w-5 h-5 shrink-0" />
-          )}
-          <span className="text-xs sm:text-sm font-bold">{notification.text}</span>
-        </div>
+        <AlertBanner
+          type={notification.type}
+          message={notification.text}
+          onClose={() => setNotification(null)}
+        />
       )}
 
       {/* Policy Instruction Header */}
@@ -225,7 +193,7 @@ export default function StudentDashboard() {
             <Info className="w-4 h-4" />
           </div>
           <p className="text-xs sm:text-sm font-medium text-base-content/80">
-            {t("fridayPolicyNote")}
+            Lunch selection is strictly permitted on Fridays only. Breakfast and dinner are automatically served every day.
           </p>
         </div>
 
@@ -239,7 +207,7 @@ export default function StudentDashboard() {
           >
             {isCanModifyLunch
               ? t("fridayOpenBadge")
-              : t("fridayLockedBadge")}
+              : t("fridayClosedBadge")}
           </span>
           <span className="text-xs font-bold text-base-content/60">
             ({selectedLunchesCount}/7 Lunches Selected)
@@ -289,7 +257,7 @@ export default function StudentDashboard() {
                       {t("breakfast")}
                     </span>
                     <span className="badge badge-xs badge-success text-[10px] text-success-content font-bold">
-                      {t("fixedBadge")}
+                      Fixed
                     </span>
                   </div>
                   <p className="text-[11px] text-base-content/70 line-clamp-2 leading-relaxed">
@@ -324,8 +292,8 @@ export default function StudentDashboard() {
                       {isMissedRedFlagDay
                         ? "Tagged Red"
                         : isLunchSelected
-                        ? t("preSelected")
-                        : t("optedOut")}
+                        ? "Selected"
+                        : "Opted Out"}
                     </span>
                   </div>
 
@@ -381,7 +349,7 @@ export default function StudentDashboard() {
                       {t("dinner")}
                     </span>
                     <span className="badge badge-xs badge-success text-[10px] text-success-content font-bold">
-                      {t("fixedBadge")}
+                      Fixed
                     </span>
                   </div>
                   <p className="text-[11px] text-base-content/70 line-clamp-2 leading-relaxed">

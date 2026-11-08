@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { getDatabase } from "@/lib/mongodb";
 import bcrypt from "bcryptjs";
+import { signJwtToken, SessionPayload } from "@/lib/auth";
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json().catch(() => ({}));
+    const body = (await req.json().catch(() => ({}))) as { email?: string; password?: string };
     const email = body.email?.trim().toLowerCase();
     const password = body.password?.trim();
 
@@ -25,7 +26,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    const isMatch = await bcrypt.compare(password, user.password as string);
     if (!isMatch) {
       return NextResponse.json(
         { success: false, message: "Invalid email or password." },
@@ -33,27 +34,30 @@ export async function POST(req: Request) {
       );
     }
 
-    const userObj = {
+    const sessionPayload: SessionPayload = {
       id: user._id.toString(),
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      room: user.room,
-      shift: user.shift,
-      isBlocked: !!user.isBlocked,
-      penaltyReason: user.penaltyReason,
-      isRedFlagged: !!user.isRedFlagged,
+      name: user.name as string,
+      email: user.email as string,
+      role: user.role as SessionPayload["role"],
+      room: user.room as string | undefined,
+      shift: user.shift as string | undefined,
+      isBlocked: Boolean(user.isBlocked),
+      penaltyReason: user.penaltyReason as string | undefined,
+      isRedFlagged: Boolean(user.isRedFlagged),
       isPasswordReset: user.isPasswordReset ?? false,
     };
+
+    const token = await signJwtToken(sessionPayload);
 
     const response = NextResponse.json({
       success: true,
       message: "Login successful.",
-      user: userObj,
+      token,
+      user: sessionPayload,
       role: user.role,
     });
 
-    response.cookies.set("meal_session", JSON.stringify(userObj), {
+    response.cookies.set("meal_session", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
@@ -62,10 +66,11 @@ export async function POST(req: Request) {
     });
 
     return response;
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Authentication service currently unavailable.";
     console.error("Local Next.js /api/auth/login error:", error);
     return NextResponse.json(
-      { success: false, message: "Authentication service currently unavailable." },
+      { success: false, message },
       { status: 500 }
     );
   }

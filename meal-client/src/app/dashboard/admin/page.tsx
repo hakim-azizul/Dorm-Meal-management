@@ -2,7 +2,10 @@
 
 import React, { useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
-import { useMealApp, StudentRecord, ChefRecord, DayKey } from "@/context/MealAppContext";
+import { useMealApp, StudentRecord, DayKey } from "@/context/MealAppContext";
+import { StatCard } from "@/components/ui/StatCard";
+import { AlertBanner } from "@/components/ui/AlertBanner";
+import { DatabaseStatusBadge } from "@/components/ui/DatabaseStatusBadge";
 import {
   ShieldCheck,
   Lock,
@@ -11,15 +14,14 @@ import {
   ChefHat,
   Search,
   UserPlus,
-  AlertTriangle,
   CheckCircle2,
+  AlertTriangle,
   Calendar,
   X,
   ShieldAlert,
   Trash2,
   KeyRound,
   RotateCcw,
-  Wifi,
 } from "lucide-react";
 
 const DAYS: DayKey[] = ["sat", "sun", "mon", "tue", "wed", "thu", "fri"];
@@ -224,13 +226,7 @@ export default function AdminDashboard() {
                 <span className="badge badge-primary badge-sm font-bold uppercase tracking-wider">
                   Hostel Administration
                 </span>
-                <span
-                  className="badge badge-xs font-bold gap-1 py-2 px-2.5 badge-success badge-outline text-emerald-600"
-                  title="Connected to MongoDB Atlas Database"
-                >
-                  <Wifi className="w-3 h-3" />
-                  <span>Database Online</span>
-                </span>
+                <DatabaseStatusBadge />
               </div>
               <p className="text-xs sm:text-sm text-base-content/60 mt-1">
                 Manage student lunch privileges, user credentials, and global system freeze.
@@ -280,59 +276,46 @@ export default function AdminDashboard() {
 
       {/* Live System Notification */}
       {notification && (
-        <div
-          className={`alert mb-6 shadow-sm rounded-2xl font-medium text-xs sm:text-sm ${
-            notification.type === "success" ? "alert-success text-white" : "alert-error text-white"
-          }`}
-        >
-          {notification.type === "success" ? (
-            <CheckCircle2 className="w-5 h-5 shrink-0" />
-          ) : (
-            <AlertTriangle className="w-5 h-5 shrink-0" />
-          )}
-          <span>{notification.text}</span>
-        </div>
+        <AlertBanner
+          type={notification.type}
+          message={notification.text}
+          onClose={() => setNotification(null)}
+        />
       )}
 
-      {/* Metrics Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="card bg-base-100 border border-base-300 p-4 rounded-2xl shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-base-content/60">Total Students</span>
-            <Users className="w-4 h-4 text-primary" />
-          </div>
-          <div className="text-2xl font-black mt-2 text-base-content">{students.length}</div>
-          <span className="text-[11px] text-base-content/50 mt-1">Hostel Residents</span>
-        </div>
+      {/* Metrics Row with Reusable StatCards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <StatCard
+          title="Total Students"
+          value={students.length}
+          icon={<Users className="w-5 h-5" />}
+          subtext="Hostel Residents"
+          colorScheme="primary"
+        />
 
-        <div className="card bg-base-100 border border-base-300 p-4 rounded-2xl shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-base-content/60">Lunches Booked</span>
-            <Calendar className="w-4 h-4 text-accent" />
-          </div>
-          <div className="text-2xl font-black mt-2 text-base-content">
-            {totalWeeklyLunchesBooked}
-          </div>
-          <span className="text-[11px] text-base-content/50 mt-1">Active Pre-selections</span>
-        </div>
+        <StatCard
+          title="Lunches Booked"
+          value={totalWeeklyLunchesBooked}
+          icon={<Calendar className="w-5 h-5" />}
+          subtext="Active Pre-selections"
+          colorScheme="accent"
+        />
 
-        <div className="card bg-base-100 border border-base-300 p-4 rounded-2xl shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-base-content/60">Restricted Students</span>
-            <ShieldAlert className="w-4 h-4 text-error" />
-          </div>
-          <div className="text-2xl font-black mt-2 text-error">{penalizedCount}</div>
-          <span className="text-[11px] text-base-content/50 mt-1">Selection Blocked</span>
-        </div>
+        <StatCard
+          title="Restricted Students"
+          value={penalizedCount}
+          icon={<ShieldAlert className="w-5 h-5" />}
+          subtext="Selection Blocked"
+          colorScheme="error"
+        />
 
-        <div className="card bg-base-100 border border-base-300 p-4 rounded-2xl shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-base-content/60">Red-Flagged Absences</span>
-            <AlertTriangle className="w-4 h-4 text-warning" />
-          </div>
-          <div className="text-2xl font-black mt-2 text-warning">{redFlagCount}</div>
-          <span className="text-[11px] text-base-content/50 mt-1">Missed Reserved Lunch</span>
-        </div>
+        <StatCard
+          title="Red-Flagged Absences"
+          value={redFlagCount}
+          icon={<AlertTriangle className="w-5 h-5" />}
+          subtext="Missed Reserved Lunch"
+          colorScheme="warning"
+        />
       </div>
 
       {/* Main Tabs and Actions */}

@@ -10,7 +10,6 @@ import {
   Mail,
   ArrowRight,
   AlertCircle,
-  ShieldCheck,
 } from "lucide-react";
 
 export default function LoginPage() {

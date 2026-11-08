@@ -1,15 +1,16 @@
 import express from "express";
 import { login, changePassword, getProfile } from "../controllers/authController.js";
+import { verifyToken } from "../middleware/auth.js";
 
 const router = express.Router();
 
-// POST /api/auth/login
+// Public: POST /api/auth/login
 router.post("/login", login);
 
-// POST /api/auth/change-password
-router.post("/change-password", changePassword);
+// Protected: POST /api/auth/change-password
+router.post("/change-password", verifyToken, changePassword);
 
-// GET /api/auth/me/:userId
-router.get("/me/:userId", getProfile);
+// Protected: GET /api/auth/me/:userId
+router.get("/me/:userId", verifyToken, getProfile);
 
 export default router;

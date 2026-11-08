@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useLanguage } from "@/context/LanguageContext";
 import { useMealApp } from "@/context/MealAppContext";
 import {
-  Utensils,
   GraduationCap,
   ShieldCheck,
   ChefHat,
@@ -17,8 +16,6 @@ import {
   Clock,
   CheckCircle2,
   Coffee,
-  SunMedium,
-  Moon,
 } from "lucide-react";
 
 export default function HomePage() {

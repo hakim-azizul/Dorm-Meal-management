@@ -1,15 +1,15 @@
 /**
- * Centralized API Service Layer for Hostel Meal Management
- * Connects to Express backend at /api
+ * Centralized Typed API Service Layer for Hostel Meal Management
+ * Connects to Express backend at /api with Bearer JWT Authorization
  */
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean;
   message?: string;
   data?: T;
-  [key: string]: any;
+  token?: string;
 }
 
 export interface StudentSelectionData {
@@ -73,11 +73,28 @@ export interface ChefTodayListResponse {
   message?: string;
 }
 
+export function getStoredToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("meal_jwt_token");
+}
+
+export function setStoredToken(token: string | null) {
+  if (typeof window === "undefined") return;
+  if (token) {
+    localStorage.setItem("meal_jwt_token", token);
+  } else {
+    localStorage.removeItem("meal_jwt_token");
+  }
+}
+
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
-  const headers = {
+  const token = getStoredToken();
+
+  const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...(options.headers || {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...((options.headers as Record<string, string>) || {}),
   };
 
   try {
@@ -86,16 +103,17 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
       headers,
     });
 
-    const data = await res.json().catch(() => ({}));
+    const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
 
     if (!res.ok) {
-      const errorMsg = data.message || `Request failed with status ${res.status}`;
+      const errorMsg = (data.message as string) || `Request failed with status ${res.status}`;
       throw new Error(errorMsg);
     }
 
     return data as T;
-  } catch (error: any) {
-    throw new Error(error.message || "Failed to communicate with backend server.");
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to communicate with backend server.";
+    throw new Error(message);
   }
 }
 
@@ -104,10 +122,16 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
    ========================================================================== */
 
 export async function loginUser(payload: { email: string; password: string }): Promise<ApiResponse<{ user: UserItem }>> {
-  return request<ApiResponse<{ user: UserItem }>>("/auth/login", {
+  const res = await request<ApiResponse<{ user: UserItem }>>("/auth/login", {
     method: "POST",
     body: JSON.stringify(payload),
   });
+
+  if (res.token) {
+    setStoredToken(res.token);
+  }
+
+  return res;
 }
 
 export async function changeUserPassword(payload: {

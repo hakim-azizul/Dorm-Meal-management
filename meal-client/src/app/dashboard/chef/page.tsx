@@ -2,22 +2,23 @@
 
 import React, { useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
-import { useMealApp, StudentRecord } from "@/context/MealAppContext";
+import { useMealApp } from "@/context/MealAppContext";
+import { AlertBanner } from "@/components/ui/AlertBanner";
+import { StatCard } from "@/components/ui/StatCard";
+import { DatabaseStatusBadge } from "@/components/ui/DatabaseStatusBadge";
 import {
   ChefHat,
   Calendar,
   CheckCircle2,
   AlertTriangle,
-  XCircle,
   Coffee,
   Sun,
   Moon,
   Search,
-  Clock,
   UserCheck,
   UserX,
   Sparkles,
-  Wifi,
+  Users,
 } from "lucide-react";
 
 export default function ChefDashboard() {
@@ -50,7 +51,7 @@ export default function ChefDashboard() {
 
     if (activeSession === "lunch") {
       // STRICT FILTER: Student MUST have pre-selected lunch for today!
-      return !!student.schedule[systemDay]?.lunchSelected;
+      return Boolean(student.schedule[systemDay]?.lunchSelected);
     }
 
     // Breakfast and Dinner: Fixed / Included for all registered hostel residents
@@ -75,8 +76,9 @@ export default function ChefDashboard() {
       } else {
         setNotification({ type: "error", text: res.message });
       }
-    } catch (err: any) {
-      setNotification({ type: "error", text: err.message || "Failed to update attendance." });
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : "Failed to update attendance.";
+      setNotification({ type: "error", text: errorMsg });
     } finally {
       setTimeout(() => setNotification(null), 4500);
     }
@@ -121,13 +123,7 @@ export default function ChefDashboard() {
               <span className="badge badge-accent badge-sm font-bold uppercase py-2.5 px-3">
                 {t("todayOnlyBadge")}
               </span>
-              <span
-                className="badge badge-xs font-bold gap-1 py-2 px-2.5 badge-success badge-outline text-emerald-600"
-                title="Connected to MongoDB Atlas Database"
-              >
-                <Wifi className="w-3 h-3" />
-                <span>Database Online</span>
-              </span>
+              <DatabaseStatusBadge />
             </div>
             <p className="text-xs sm:text-sm text-base-content/70 mt-1">
               Active Dining Hall Attendance • Pre-Selection Verification & Red-Flag Absence Tracking
@@ -153,77 +149,52 @@ export default function ChefDashboard() {
 
       {/* Notification Toast */}
       {notification && (
-        <div
-          className={`alert mb-6 shadow-md transition-all ${
-            notification.type === "success"
-              ? "alert-success text-success-content"
-              : "alert-error text-white"
-          }`}
-        >
-          {notification.type === "success" ? (
-            <CheckCircle2 className="w-5 h-5 shrink-0" />
-          ) : (
-            <AlertTriangle className="w-5 h-5 shrink-0" />
-          )}
-          <span className="text-xs sm:text-sm font-bold">{notification.text}</span>
-        </div>
+        <AlertBanner
+          type={notification.type}
+          message={notification.text}
+          onClose={() => setNotification(null)}
+        />
       )}
 
-      {/* Real-time Kitchen Attendance Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
-        <div className="p-5 rounded-2xl bg-base-100 border border-base-300 shadow-xs">
-          <div className="text-xs font-bold text-base-content/60 uppercase mb-1">
-            {t("expectedToday")} {t(activeSession)}
-          </div>
-          <div className="text-3xl font-black text-base-content">
-            {activeSession === "lunch" ? expectedLunchCount : students.length}
-          </div>
-          <span className="text-[11px] text-base-content/60">
-            {activeSession === "lunch"
-              ? "Students with confirmed lunch"
-              : "All registered hostel residents"}
-          </span>
-        </div>
+      {/* Real-time Kitchen Attendance Stats with Reusable StatCards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <StatCard
+          title={`Expected for ${activeSession.toUpperCase()}`}
+          value={activeSession === "lunch" ? expectedLunchCount : students.length}
+          icon={<Users className="w-5 h-5" />}
+          subtext={activeSession === "lunch" ? "Pre-selected lunch diners" : "All registered residents"}
+          colorScheme="primary"
+        />
 
-        <div className="p-5 rounded-2xl bg-base-100 border border-base-300 shadow-xs">
-          <div className="text-xs font-bold text-base-content/60 uppercase mb-1">
-            {t("presentCount")}
-          </div>
-          <div className="text-3xl font-black text-emerald-600">
-            {activeSession === "lunch"
+        <StatCard
+          title="Checked In (Present)"
+          value={
+            activeSession === "lunch"
               ? presentLunchCount
               : activeSession === "breakfast"
               ? students.filter((s) => s.attendanceToday.breakfast).length
-              : students.filter((s) => s.attendanceToday.dinner).length}
-          </div>
-          <span className="text-[11px] text-emerald-600/80 font-bold">
-            Verified diners checked in
-          </span>
-        </div>
+              : students.filter((s) => s.attendanceToday.dinner).length
+          }
+          icon={<CheckCircle2 className="w-5 h-5" />}
+          subtext="Verified diners served"
+          colorScheme="success"
+        />
 
-        <div className="p-5 rounded-2xl bg-base-100 border border-base-300 shadow-xs">
-          <div className="text-xs font-bold text-base-content/60 uppercase mb-1">
-            {t("absentCount")}
-          </div>
-          <div className="text-3xl font-black text-rose-600">
-            {activeSession === "lunch" ? absentLunchCount : 0}
-          </div>
-          <span className="text-[11px] text-rose-500/80 font-bold">
-            Missed lunch check-ins
-          </span>
-        </div>
+        <StatCard
+          title="Marked Absent"
+          value={activeSession === "lunch" ? absentLunchCount : 0}
+          icon={<AlertTriangle className="w-5 h-5" />}
+          subtext="Missed lunch check-ins"
+          colorScheme="error"
+        />
 
-        <div className="p-5 rounded-2xl bg-base-100 border border-base-300 shadow-xs">
-          <div className="text-xs font-bold text-base-content/60 uppercase mb-1">
-            Red-Flagged Diners
-          </div>
-          <div className="text-3xl font-black text-amber-500">
-            {activeRedFlagCount}
-          </div>
-          <span className="text-[11px] text-amber-500/80 font-bold">
-            Flags clear upon check-in
-          </span>
-        </div>
+        <StatCard
+          title="Red-Flagged Residents"
+          value={activeRedFlagCount}
+          icon={<AlertTriangle className="w-5 h-5" />}
+          subtext="Cleared upon present check-in"
+          colorScheme="warning"
+        />
       </div>
 
       {/* Meal Session Selection Tabs */}
@@ -236,7 +207,7 @@ export default function ChefDashboard() {
             }`}
           >
             <Coffee className="w-4 h-4" />
-            <span>{t("breakfastTab")}</span>
+            <span>Breakfast (All Students)</span>
           </button>
 
           <button
@@ -246,7 +217,7 @@ export default function ChefDashboard() {
             }`}
           >
             <Sun className="w-4 h-4" />
-            <span>{t("lunchTab")}</span>
+            <span>Lunch (Pre-Selected ONLY)</span>
             <span className="badge badge-xs badge-warning ml-1 font-bold">STRICT</span>
           </button>
 
@@ -257,7 +228,7 @@ export default function ChefDashboard() {
             }`}
           >
             <Moon className="w-4 h-4" />
-            <span>{t("dinnerTab")}</span>
+            <span>Dinner (All Students)</span>
           </button>
         </div>
 
@@ -292,7 +263,7 @@ export default function ChefDashboard() {
               <tr>
                 <th>Resident</th>
                 <th>Room</th>
-                <th>Today's Meal Status</th>
+                <th>Session Status</th>
                 <th>Absence Red-Flag Indicator</th>
                 <th>Attendance Action</th>
               </tr>
@@ -302,7 +273,7 @@ export default function ChefDashboard() {
                 <tr>
                   <td colSpan={5} className="text-center py-10 text-base-content/60">
                     {activeSession === "lunch"
-                      ? "No students have pre-selected lunch for today. Kitchen service is not required for other students."
+                      ? "No students have pre-selected lunch for today. Kitchen service is not required for non-selected students."
                       : "No matching student records found."}
                   </td>
                 </tr>
@@ -349,11 +320,11 @@ export default function ChefDashboard() {
                         {activeSession === "lunch" ? (
                           <span className="badge badge-primary gap-1 text-xs font-bold py-2">
                             <CheckCircle2 className="w-3 h-3" />
-                            {t("preSelected")}
+                            Pre-Selected
                           </span>
                         ) : (
                           <span className="badge badge-success gap-1 text-xs font-bold py-2 text-success-content">
-                            {t("fixedBadge")}
+                            Fixed Meal
                           </span>
                         )}
                       </td>
@@ -389,12 +360,12 @@ export default function ChefDashboard() {
                             {lunchStatus === "present" ? (
                               <div className="flex items-center gap-1.5 text-emerald-600 font-bold text-xs">
                                 <CheckCircle2 className="w-4 h-4" />
-                                <span>{t("verifiedPresent")}</span>
+                                <span>Verified Present</span>
                               </div>
                             ) : lunchStatus === "absent" ? (
                               <div className="flex items-center gap-2">
                                 <span className="badge badge-error text-white font-bold text-xs py-2">
-                                  {t("markedAbsent")}
+                                  Marked Absent
                                 </span>
                                 <button
                                   onClick={() => handleLunchStatus(student.id, "present")}
@@ -411,14 +382,14 @@ export default function ChefDashboard() {
                                   className="btn btn-xs btn-success text-white font-bold gap-1 shadow-xs"
                                 >
                                   <UserCheck className="w-3.5 h-3.5" />
-                                  <span>{t("markPresent")}</span>
+                                  <span>Present</span>
                                 </button>
                                 <button
                                   onClick={() => handleLunchStatus(student.id, "absent")}
                                   className="btn btn-xs btn-outline btn-error font-bold gap-1"
                                 >
                                   <UserX className="w-3.5 h-3.5" />
-                                  <span>{t("markAbsent")}</span>
+                                  <span>Absent</span>
                                 </button>
                               </div>
                             )}
@@ -427,7 +398,7 @@ export default function ChefDashboard() {
                           isBreakfastDone ? (
                             <span className="text-xs text-emerald-600 font-bold flex items-center gap-1">
                               <CheckCircle2 className="w-4 h-4" />
-                              <span>{t("verifiedPresent")}</span>
+                              <span>Verified Present</span>
                             </span>
                           ) : (
                             <button
@@ -435,14 +406,14 @@ export default function ChefDashboard() {
                               className="btn btn-xs btn-accent text-accent-content font-bold gap-1 shadow-xs"
                             >
                               <UserCheck className="w-3.5 h-3.5" />
-                              <span>{t("markPresent")}</span>
+                              <span>Present</span>
                             </button>
                           )
                         ) : (
                           isDinnerDone ? (
                             <span className="text-xs text-emerald-600 font-bold flex items-center gap-1">
                               <CheckCircle2 className="w-4 h-4" />
-                              <span>{t("verifiedPresent")}</span>
+                              <span>Verified Present</span>
                             </span>
                           ) : (
                             <button
@@ -450,7 +421,7 @@ export default function ChefDashboard() {
                               className="btn btn-xs btn-accent text-accent-content font-bold gap-1 shadow-xs"
                             >
                               <UserCheck className="w-3.5 h-3.5" />
-                              <span>{t("markPresent")}</span>
+                              <span>Present</span>
                             </button>
                           )
                         )}

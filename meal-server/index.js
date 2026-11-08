@@ -26,17 +26,36 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/chef", chefRoutes);
 
 // Health check
-app.get("/", (req, res) => {
+app.get("/", (_req, res) => {
   res.json({
     status: "online",
     service: "Weekly Meal Management API",
     version: "1.0.0",
+    security: "JWT-Protected",
     endpoints: {
       auth: "/api/auth",
       student: "/api/meals",
       admin: "/api/admin",
       chef: "/api/chef",
     },
+  });
+});
+
+// 404 Handler
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Route not found: ${req.method} ${req.originalUrl}`,
+  });
+});
+
+// Centralized Error Handling Middleware
+app.use((err, _req, res, _next) => {
+  console.error("Unhandled Server Error:", err);
+  const status = err.status || 500;
+  res.status(status).json({
+    success: false,
+    message: err.message || "An unexpected server error occurred.",
   });
 });
 

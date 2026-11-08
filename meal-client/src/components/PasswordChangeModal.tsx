@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import { useLanguage } from "@/context/LanguageContext";
 import { useMealApp } from "@/context/MealAppContext";
 import { KeyRound, CheckCircle2, AlertCircle, Eye, EyeOff, ShieldCheck, X, Sparkles } from "lucide-react";
 
@@ -12,7 +11,6 @@ export function PasswordChangeModal({
   isOpen: boolean;
   onClose: () => void;
 }) {
-  const { t, language } = useLanguage();
   const { currentUser, changePassword } = useMealApp();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");

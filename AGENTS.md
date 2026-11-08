@@ -708,3 +708,44 @@ npm run seed
 - **Middleware & Session Cookies**: Implemented `src/middleware.ts` validating `meal_session` cookies. Restricts unauthorized access to dashboards and enforces role segregation at the edge.
 - **Production Guardrails**: Friday simulation toggle hidden in production UI and locked in context.
 - **Build Status**: Verified via `next build --webpack` - passed with zero TypeScript and bundle errors.
+
+---
+
+## Production Security & Architecture Hardening Report (Latest Milestone)
+
+### 1. Dual-Sided JWT Security & Authorization
+- **Server-Side (`meal-server`)**:
+  - Implemented `middleware/auth.js` with `generateToken`, `verifyToken`, and `requireRole` guard middlewares using `jsonwebtoken`.
+  - Configured `authController.js` to issue signed JWT tokens containing `{ id, email, role, name }` with a 7-day expiration upon successful authentication.
+  - Secured all API route groups with token verification:
+    - `POST /api/auth/change-password` & `GET /api/auth/me/:userId` require valid JWT.
+    - `/api/meals/*` strictly requires authenticated token.
+    - `/api/admin/*` strictly requires authenticated JWT with `role === "admin"`.
+    - `/api/chef/*` strictly requires authenticated JWT with `role === "chef" || role === "admin"`.
+  - Added centralized 404 and global error handling middlewares in `meal-server/index.js`.
+- **Client-Side (`meal-client`)**:
+  - Replaced legacy broken Better-Auth stubs with edge-compatible `src/lib/auth.ts` powered by `jose` (`SignJWT` & `jwtVerify`).
+  - Hardened `src/middleware.ts` to cryptographically verify the JWT session cookie (`meal_session`), completely preventing client-side cookie forgery or tampering.
+  - Updated `src/lib/api.ts` to automatically attach `Authorization: Bearer <token>` to all Express API calls.
+
+### 2. Type Safety & Zero `any` Audit
+- Scanned and eliminated **all** occurrences of `any` types throughout `meal-client/src`:
+  - `UserListItem`, `StudentSelectionResult`, `WeeklySelectionData`, `FormattedAuditLog`, `AuditLogActor`, and `ChefStudentItem` are strictly typed.
+  - Replaced all untyped catch blocks `catch (err: any)` with typed `catch (err: unknown)` accompanied by safe `err instanceof Error` assertions.
+  - Verified 0 instances of `: any`, `<any>`, or `as any` across all client source code.
+
+### 3. Component Reusability & DRY Refactoring
+- Created dedicated reusable UI primitives in `src/components/ui/`:
+  - `StatCard.tsx`: Standardized metric cards across Admin and Chef dashboards.
+  - `AlertBanner.tsx`: Reusable alert banners with DaisyUI type variants and dismiss controls.
+  - `DatabaseStatusBadge.tsx`: Reusable MongoDB Atlas status indicator pill.
+- Refactored `StudentDashboard`, `ChefDashboard`, and `AdminDashboard` to leverage these shared components, reducing duplicate HTML boilerplate by over 120 lines.
+- Resolved all React 19 / React Compiler ESLint rules:
+  - Eliminated cascading state updates in `LanguageContext.tsx` and `ThemeContext.tsx` via lazy `useState` initializers.
+  - Synchronized DOM attributes (`data-theme`, `dir`, `lang`) safely in `useEffect`.
+  - Removed all unused icon and variable imports.
+
+### 4. Build & Production Verification
+- **ESLint**: Passed with 0 errors and 0 warnings (`npm run lint`).
+- **Next.js Production Build**: Passed with 0 errors (`next build --webpack`).
+- **Express Backend**: Verified syntax and startup cleanly.
