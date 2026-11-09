@@ -35,15 +35,15 @@ export const translations = {
   heroBadge: { en: "Smart Hostel Dining & Attendance", ar: "إدارة ذكية لوجبات وحضور السكن الجامعي" },
   heroTitle: { en: "Automated, Fair & Frictionless Hostel Meals", ar: "وجبات سكنية مؤتمتة، عادلة، وبدون تعقيد" },
   heroSubtitle: { 
-    en: "Zero food waste. Students customize lunches on Fridays, breakfast and dinner are always ready, and kitchen managers validate pre-selected meals seamlessly.", 
-    ar: "لا هدر للطعام. يحدد الطلاب خيارات الغداء أيام الجمعة فقط، الفطور والعشاء مضمونان دائمًا، وتأكيد الحضور بدقة للطاهي." 
+    en: "Zero food waste. Students customize lunches when unlocked by admin, breakfast and dinner are always ready, and kitchen managers validate pre-selected meals seamlessly.", 
+    ar: "لا هدر للطعام. يحدد الطلاب خيارات الغداء عند فتح القفل الإداري، الفطور والعشاء مضمونان دائمًا، وتأكيد الحضور بدقة للطاهي." 
   },
   ctaDashboard: { en: "Open Dashboard", ar: "فتح لوحة التحكم" },
   ctaLogin: { en: "Sign In to Account", ar: "تسجيل الدخول" },
   feature1Title: { en: "Fixed Breakfast & Dinner", ar: "فطور وعشاء ثابت وتلقائي" },
   feature1Desc: { en: "Never worry about morning or night hunger. Breakfast and dinner are automatically selected and guaranteed for all residents.", ar: "لا داعي للقلق بشأن الصباح والمساء. الفطور والعشاء محجوزان ومضمنان تلقائيًا لجميع المقيمين." },
-  feature2Title: { en: "Friday-Only Lunch Choices", ar: "تحديد وجبات الغداء الجمعة فقط" },
-  feature2Desc: { en: "Lunch selection is exclusively open on Fridays for the upcoming week. Locked automatically to maintain kitchen inventory accuracy.", ar: "تحديد وجبات الغداء مفتوح حصرياً أيام الجمعة للأسبوع القادم، ويغلق تلقائياً لضبط ميزانية وتموين المطبخ." },
+  feature2Title: { en: "Global Selection Lock Control", ar: "التحكم المباشر عبر القفل العام" },
+  feature2Desc: { en: "Lunch selection is exclusively controlled by the Admin's Global Lock toggle. Locked or unlocked instantly to maintain inventory accuracy.", ar: "تحديد وجبات الغداء يتحكم به مباشرة القفل الإداري العام، لتجميد أو فتح خيارات الطلاب فورياً وضبط المخزون بدقة." },
   feature3Title: { en: "Admin Override & Discipline", ar: "تحكم الإدارة والعقوبات الانضباطية" },
   feature3Desc: { en: "Global lock/unlock switch with the ability to pause or penalize individual student meal selections instantly.", ar: "مفتاح إغلاق عام للنظام مع إمكانية تعليق أو معاقبة خيارات الطلاب بشكل فردي وفوري عند المخالفات." },
   feature4Title: { en: "Chef Absence Red Flags", ar: "تنبيهات الغياب باللون الأحمر للطاهي" },
@@ -70,11 +70,11 @@ export const translations = {
     ar: "حدد خيارات الغداء للأسبوع القادم. الفطور والعشاء محجوزان ومتاحان تلقائياً كل يوم." 
   },
   selectionLockedNotice: { 
-    en: "Meal choices can only be submitted or modified on FRIDAYS. On all other days, choices are frozen.", 
-    ar: "تحديد الوجبات وتعديلها متاح أيام الجمعة فقط. في بقية الأيام يكون الجدول مقفلاً." 
+    en: "Meal choices are currently frozen by hostel administration. You can modify choices when the Global Lock is opened.", 
+    ar: "تحديد الوجبات وتعديلها مجمد حالياً من قبل الإدارة. يمكنك تعديل الوجبات عند فتح القفل العام." 
   },
-  fridayOpenBadge: { en: "SELECTION OPEN (FRIDAY)", ar: "نافذة الاختيار مفتوحة (الجمعة)" },
-  fridayClosedBadge: { en: "Selection Locked (Fridays Only)", ar: "مغلق (أيام الجمعة فقط)" },
+  fridayOpenBadge: { en: "SELECTION OPEN", ar: "نافذة الاختيار مفتوحة" },
+  fridayClosedBadge: { en: "Selection Frozen (Global Lock)", ar: "مغلق (القفل العام)" },
   fixedNotice: { en: "Fixed & Included Daily", ar: "ثابت ومضمن يومياً" },
   selectLunchLabel: { en: "Opt-in for Lunch Meal", ar: "حجز وجبة الغداء لهذا اليوم" },
   unselectLunchLabel: { en: "Opted-out (No Lunch Meal)", ar: "غير محجوز (بدون غداء)" },
@@ -103,11 +103,11 @@ export const translations = {
   createStudentBtn: { en: "Add Student", ar: "إضافة طالب" },
   createChefBtn: { en: "Add Chef", ar: "إضافة طاهٍ" },
   globalLockHelp: { 
-    en: "Freezes all student meal selection capabilities immediately after Friday window closes", 
-    ar: "إقفال خيارات جميع الطلاب فور انتهاء يوم الجمعة" 
+    en: "Instantly freezes or re-opens all student meal selection capabilities system-wide", 
+    ar: "تجميد أو إعادة فتح إمكانية تحديد الوجبات لجميع الطلاب فورياً على مستوى النظام بالكامل" 
   },
-  lockActive: { en: "LOCKED (All Students Blocked)", ar: "مُقفل (ممنوع التعديل للجميع)" },
-  lockInactive: { en: "UNLOCKED (Open on Fridays)", ar: "مفتوح (متاح التعديل أيام الجمعة)" },
+  lockActive: { en: "LOCKED (All Selections Frozen)", ar: "مُقفل (تجميد اختيارات الجميع)" },
+  lockInactive: { en: "UNLOCKED (Students Can Select)", ar: "مفتوح (يمكن للطلاب التحديد)" },
   totalStudents: { en: "Total Students", ar: "إجمالي الطلاب" },
   activePenalties: { en: "Penalized Students", ar: "الطلاب المعاقبون" },
   redFlaggedStudents: { en: "Red-Flagged Absentees", ar: "المسجلين بالراية الحمراء" },

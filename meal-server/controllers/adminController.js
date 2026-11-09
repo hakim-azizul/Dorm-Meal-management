@@ -1,5 +1,6 @@
 import { User } from "../models/User.js";
 import { MealSelection } from "../models/MealSelection.js";
+import { Attendance } from "../models/Attendance.js";
 import { SystemConfig } from "../models/SystemConfig.js";
 import { getCurrentWeekStartDate } from "./studentController.js";
 import bcrypt from "bcryptjs";
@@ -227,118 +228,166 @@ export const deleteUser = async (req, res) => {
   }
 };
 
-// GET /api/admin/weekly-report
+// GET /api/admin/report or /api/admin/weekly-report
 export const getWeeklyReport = async (req, res) => {
   try {
     const DAY_KEYS = ["sat", "sun", "mon", "tue", "wed", "thu", "fri"];
-    const targetWeek = req.query.weekStartDate || getCurrentWeekStartDate();
+    const dayKeyMap = { 0: "sun", 1: "mon", 2: "tue", 3: "wed", 4: "thu", 5: "fri", 6: "sat" };
+
+    const getWeekStart = (dateStr) => {
+      const d = new Date(`${dateStr}T00:00:00Z`);
+      const day = d.getUTCDay();
+      const diffToSat = day === 6 ? 0 : -(day + 1);
+      const sat = new Date(d);
+      sat.setUTCDate(d.getUTCDate() + diffToSat);
+      return sat.toISOString().split("T")[0];
+    };
+
+    let fromDate = req.query.fromDate || req.query.startDate;
+    let toDate = req.query.toDate || req.query.endDate;
+
+    if (!fromDate && !toDate) {
+      const targetWeek = req.query.weekStartDate || getCurrentWeekStartDate();
+      const weekStartObj = new Date(targetWeek);
+      fromDate = targetWeek;
+      const endD = new Date(weekStartObj);
+      endD.setDate(weekStartObj.getDate() + 6);
+      toDate = endD.toISOString().split("T")[0];
+    } else {
+      if (!fromDate) fromDate = toDate;
+      if (!toDate) toDate = fromDate;
+      if (fromDate > toDate) {
+        const temp = fromDate;
+        fromDate = toDate;
+        toDate = temp;
+      }
+    }
+
+    // Generate date list
+    const datesList = [];
+    const current = new Date(`${fromDate}T00:00:00Z`);
+    const end = new Date(`${toDate}T00:00:00Z`);
+    let guard = 0;
+    while (current <= end && guard < 90) {
+      datesList.push(current.toISOString().split("T")[0]);
+      current.setUTCDate(current.getUTCDate() + 1);
+      guard++;
+    }
 
     const students = await User.find({ role: "student" }).sort({ room: 1, name: 1 });
     const studentIds = students.map((s) => s._id);
 
-    // Compute 7 calendar dates (YYYY-MM-DD) starting from Saturday targetWeek
-    const weekStartObj = new Date(targetWeek);
-    const datesMap = {};
-    DAY_KEYS.forEach((day, index) => {
-      const d = new Date(weekStartObj);
-      d.setDate(weekStartObj.getDate() + index);
-      datesMap[day] = d.toISOString().split("T")[0];
-    });
-    const weekDates = Object.values(datesMap);
-
+    const distinctWeekStarts = Array.from(new Set(datesList.map(getWeekStart)));
     const selections = await MealSelection.find({
       studentId: { $in: studentIds },
-      weekStartDate: targetWeek,
+      weekStartDate: { $in: distinctWeekStarts },
     });
 
     const attendances = await Attendance.find({
       studentId: { $in: studentIds },
-      date: { $in: weekDates },
+      date: { $gte: fromDate, $lte: toDate },
     });
 
-    const selectionByStudent = new Map();
+    const selectionMap = new Map();
     selections.forEach((sel) => {
-      selectionByStudent.set(sel.studentId.toString(), sel.lunchSelections || {});
+      selectionMap.set(`${sel.studentId.toString()}_${sel.weekStartDate}`, sel.lunchSelections || {});
     });
 
-    const attendanceByStudent = new Map();
+    const attendanceMap = new Map();
     attendances.forEach((att) => {
-      const sId = att.studentId.toString();
-      if (!attendanceByStudent.has(sId)) {
-        attendanceByStudent.set(sId, new Map());
-      }
-      const key = `${att.date}_${att.mealType}`;
-      attendanceByStudent.get(sId).set(key, att.status);
+      attendanceMap.set(`${att.studentId.toString()}_${att.date}_${att.mealType}`, att.status);
     });
 
-    const report = students.map((stu) => {
-      const sId = stu._id.toString();
-      const lunchPrefs = selectionByStudent.get(sId) || {
-        sat: true,
-        sun: true,
-        mon: true,
-        tue: true,
-        wed: true,
-        thu: true,
-        fri: false,
-      };
+    const defaultLunchPrefs = {
+      sat: true,
+      sun: true,
+      mon: true,
+      tue: true,
+      wed: true,
+      thu: true,
+      fri: false,
+    };
 
-      const daysBreakdown = {};
-      let totalLunchesBooked = 0;
-      let totalLunchesAttended = 0;
-      let totalLunchesMissed = 0;
-      let totalBreakfastsAttended = 0;
-      let totalDinnersAttended = 0;
+    const mealTypes = ["breakfast", "lunch", "dinner"];
+    const records = [];
+    let totalPresent = 0;
+    let totalAbsent = 0;
+    let totalUnmarked = 0;
+    let totalLunchesBooked = 0;
+    let totalLunchesAttended = 0;
+    let totalLunchesMissed = 0;
+    let totalBreakfastsAttended = 0;
+    let totalDinnersAttended = 0;
 
-      DAY_KEYS.forEach((day) => {
-        const dateStr = datesMap[day];
-        const studentAttMap = attendanceByStudent.get(sId);
-        const lunchBooked = Boolean(lunchPrefs[day]);
-        if (lunchBooked) totalLunchesBooked++;
+    datesList.forEach((dateStr) => {
+      const dateObj = new Date(`${dateStr}T00:00:00Z`);
+      const dayKey = dayKeyMap[dateObj.getUTCDay()] || "mon";
+      const weekStart = getWeekStart(dateStr);
 
-        const lunchAtt = studentAttMap?.get(`${dateStr}_lunch`) || "unmarked";
-        const breakfastAtt = studentAttMap?.get(`${dateStr}_breakfast`) || "unmarked";
-        const dinnerAtt = studentAttMap?.get(`${dateStr}_dinner`) || "unmarked";
+      students.forEach((stu) => {
+        const sId = stu._id.toString();
+        const studentWeekLunch = selectionMap.get(`${sId}_${weekStart}`) || defaultLunchPrefs;
 
-        if (lunchAtt === "present") totalLunchesAttended++;
-        if (lunchBooked && lunchAtt === "absent") totalLunchesMissed++;
-        if (breakfastAtt === "present") totalBreakfastsAttended++;
-        if (dinnerAtt === "present") totalDinnersAttended++;
+        mealTypes.forEach((mealType) => {
+          const status = attendanceMap.get(`${sId}_${dateStr}_${mealType}`) || "unmarked";
+          const booked = mealType === "lunch" ? Boolean(studentWeekLunch[dayKey]) : true;
 
-        daysBreakdown[day] = {
-          date: dateStr,
-          lunchBooked,
-          lunchStatus: lunchAtt,
-          breakfastStatus: breakfastAtt,
-          dinnerStatus: dinnerAtt,
-        };
+          if (status === "present") {
+            totalPresent++;
+            if (mealType === "lunch") totalLunchesAttended++;
+            if (mealType === "breakfast") totalBreakfastsAttended++;
+            if (mealType === "dinner") totalDinnersAttended++;
+          } else if (status === "absent") {
+            totalAbsent++;
+            if (mealType === "lunch" && booked) totalLunchesMissed++;
+          } else {
+            totalUnmarked++;
+          }
+
+          if (mealType === "lunch" && booked) {
+            totalLunchesBooked++;
+          }
+
+          records.push({
+            id: `${sId}_${dateStr}_${mealType}`,
+            studentId: sId,
+            studentName: stu.name,
+            room: stu.room || "N/A",
+            email: stu.email,
+            isBlocked: Boolean(stu.isBlocked),
+            isRedFlagged: Boolean(stu.isRedFlagged),
+            penaltyReason: stu.penaltyReason || "",
+            date: dateStr,
+            day: dayKey,
+            mealType,
+            booked,
+            attendanceStatus: status,
+          });
+        });
       });
-
-      return {
-        id: sId,
-        name: stu.name,
-        room: stu.room || "N/A",
-        email: stu.email,
-        isBlocked: Boolean(stu.isBlocked),
-        isRedFlagged: Boolean(stu.isRedFlagged),
-        penaltyReason: stu.penaltyReason || "",
-        summary: {
-          totalLunchesBooked,
-          totalLunchesAttended,
-          totalLunchesMissed,
-          totalBreakfastsAttended,
-          totalDinnersAttended,
-        },
-        days: daysBreakdown,
-      };
     });
+
+    const summary = {
+      fromDate,
+      toDate,
+      totalStudents: students.length,
+      totalRecords: records.length,
+      totalPresent,
+      totalAbsent,
+      totalUnmarked,
+      totalLunchesBooked,
+      totalLunchesAttended,
+      totalLunchesMissed,
+      totalBreakfastsAttended,
+      totalDinnersAttended,
+      flaggedCount: students.filter((s) => s.isRedFlagged).length,
+      blockedCount: students.filter((s) => s.isBlocked).length,
+    };
 
     return res.status(200).json({
       success: true,
-      weekStartDate: targetWeek,
-      weekEndDate: datesMap.fri,
-      totalStudents: students.length,
-      report,
+      summary,
+      records,
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });

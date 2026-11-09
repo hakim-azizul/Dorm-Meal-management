@@ -25,6 +25,7 @@ import {
   AlertTriangle,
   X,
   Search,
+  FileSpreadsheet,
 } from "lucide-react";
 
 export interface DashboardSidebarProps {
@@ -37,8 +38,8 @@ export interface DashboardSidebarProps {
   chefSession?: "breakfast" | "lunch" | "dinner";
   onChefSessionChange?: (session: "breakfast" | "lunch" | "dinner") => void;
   // Optional admin active tab
-  adminTab?: "students" | "chefs";
-  onAdminTabChange?: (tab: "students" | "chefs") => void;
+  adminTab?: "students" | "chefs" | "reports";
+  onAdminTabChange?: (tab: "students" | "chefs" | "reports") => void;
 }
 
 export function DashboardSidebar({
@@ -90,10 +91,10 @@ export function DashboardSidebar({
     },
     admin: {
       title: t("roleAdmin"),
-      icon: <ShieldCheck className="w-5 h-5 text-secondary" />,
-      badgeClass: "badge-secondary",
-      bgClass: "bg-secondary/10",
-      accentBorder: "border-secondary/30",
+      icon: <ShieldCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />,
+      badgeClass: "bg-emerald-600 text-white font-bold",
+      bgClass: "bg-emerald-500/10",
+      accentBorder: "border-emerald-500/30",
     },
     chef: {
       title: t("roleChef"),
@@ -249,7 +250,7 @@ export function DashboardSidebar({
                         onClick={() => onSelectStudent?.(stu)}
                         className={`w-full text-start p-1.5 rounded-lg text-xs flex items-center justify-between transition-colors ${
                           isSelected
-                            ? "bg-secondary text-secondary-content font-bold"
+                            ? "bg-emerald-600 text-white font-bold"
                             : "hover:bg-base-300/60 text-base-content"
                         }`}
                       >
@@ -302,12 +303,12 @@ export function DashboardSidebar({
                   </span>
                   <span
                     className={`badge badge-xs text-[10px] font-bold ${
-                      isFriday
+                      !isGlobalLocked
                         ? "badge-success text-success-content"
                         : "badge-ghost"
                     }`}
                   >
-                    {isFriday ? "Friday Open" : "Locked"}
+                    {!isGlobalLocked ? "Open" : "Locked"}
                   </span>
                 </Link>
               </div>
@@ -320,7 +321,7 @@ export function DashboardSidebar({
                   onClick={() => onAdminTabChange?.("students")}
                   className={`w-full flex items-center justify-between p-2.5 rounded-xl font-bold text-xs transition-colors ${
                     adminTab === "students"
-                      ? "bg-secondary text-secondary-content shadow-xs"
+                      ? "bg-emerald-600 text-white shadow-xs"
                       : "text-base-content/80 hover:bg-base-200"
                   }`}
                 >
@@ -337,13 +338,30 @@ export function DashboardSidebar({
                   onClick={() => onAdminTabChange?.("chefs")}
                   className={`w-full flex items-center justify-between p-2.5 rounded-xl font-bold text-xs transition-colors ${
                     adminTab === "chefs"
-                      ? "bg-secondary text-secondary-content shadow-xs"
+                      ? "bg-emerald-600 text-white shadow-xs"
                       : "text-base-content/80 hover:bg-base-200"
                   }`}
                 >
                   <span className="flex items-center gap-2">
                     <ChefHat className="w-4 h-4" />
                     <span>Kitchen Chefs</span>
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => onAdminTabChange?.("reports")}
+                  className={`w-full flex items-center justify-between p-2.5 rounded-xl font-bold text-xs transition-colors ${
+                    adminTab === "reports"
+                      ? "bg-emerald-600 text-white shadow-xs"
+                      : "text-base-content/80 hover:bg-base-200"
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <FileSpreadsheet className="w-4 h-4" />
+                    <span>Reports & Downloads</span>
+                  </span>
+                  <span className="badge badge-sm badge-success text-success-content text-[10px]">
+                    CSV
                   </span>
                 </button>
 

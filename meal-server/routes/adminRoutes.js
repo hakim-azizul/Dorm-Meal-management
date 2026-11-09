@@ -31,4 +31,8 @@ router.post("/users", createUser);
 router.post("/reset-password", resetUserPassword);
 router.delete("/users/:id", deleteUser);
 
+// Attendance & Meal Reports
+router.get("/report", getWeeklyReport);
+router.get("/weekly-report", getWeeklyReport);
+
 export default router;

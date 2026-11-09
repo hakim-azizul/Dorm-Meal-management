@@ -239,6 +239,18 @@ export async function deleteUser(userId: string): Promise<ApiResponse> {
   });
 }
 
+export async function getAdminReport(fromDate?: string, toDate?: string): Promise<{
+  success: boolean;
+  summary: Record<string, unknown>;
+  records: Array<Record<string, unknown>>;
+}> {
+  const query = new URLSearchParams();
+  if (fromDate) query.append("fromDate", fromDate);
+  if (toDate) query.append("toDate", toDate);
+  const qStr = query.toString();
+  return request(`/admin/report${qStr ? `?${qStr}` : ""}`);
+}
+
 /* ==========================================================================
    4. CHEF / ATTENDANCE API CALLS
    ========================================================================== */

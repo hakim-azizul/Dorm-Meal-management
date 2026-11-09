@@ -190,7 +190,7 @@ Every state-altering administrative or disciplinary operation creates an immutab
 | Capability / Action | Student | Admin (Warden) | Chef (Mess Manager) |
 |---|:---:|:---:|:---:|
 | View Personal Weekly Schedule | Full | Read/Override | No |
-| Select / Deselect Friday Lunches | Friday Only | Anytime Override | No |
+| Select / Deselect Weekly Lunches | Unlocked Only | Anytime Override | No |
 | View Global Attendance Roaster | No | Full List | Daily Session Only |
 | Toggle Global Selection Lock | No | Full Control | No |
 | Suspend Student Privileges (`isBlocked`) | No | Full Control | No |
@@ -202,25 +202,22 @@ Every state-altering administrative or disciplinary operation creates an immutab
 ---
 
 ### 3.2 Student Business Rules
-1. **Operating Week Structure & Upcoming Cycle Logic**:
+1. **Operating Week Structure & Cycle Logic**:
    - The meal schedule follows a fixed 7-day cycle: **Saturday through Friday**.
-   - During Saturday through Thursday, students view the active operating week with lunch choices locked.
-   - On **Fridays** (`new Date().getDay() === 5`), the selection window opens exclusively for the **upcoming week cycle** (starting tomorrow, Saturday, through to the following Friday).
-   - Once a new Friday arrives, selections advance to the next subsequent weekly cycle.
+   - Meal selection capability is tied directly and exclusively to the Admin's **Global Lock** toggle.
 2. **Fixed Daily Meals (Breakfast & Dinner)**:
    - Breakfast and dinner are universally guaranteed daily allotments for all enrolled residents.
    - Compressed alongside Lunch into a **single clean horizontal line/row** per day.
-3. **Strict Friday-Only Lunch Selection (Zero Dev Simulation Toggles)**:
-   - Students may **only** alter lunch preferences on **Fridays** (`new Date().getDay() === 5`).
-   - On Saturday through Thursday, all lunch controls are rendered locked and non-interactive.
-   - Simulation flags and bypass toggles are completely eradicated; the system strictly enforces real calendar day checks across edge actions and REST controllers.
+3. **Global Lock Controlled Selection Window**:
+   - When the Admin turns off the Global Lock (`isGlobalLocked: false`), students can freely modify their lunch selections.
+   - When the Admin turns on the Global Lock (`isGlobalLocked: true`), meal selections are instantly frozen system-wide.
 4. **Administrative Block Enforcements**:
    - If `user.isBlocked === true`, the student is barred from making meal selections.
    - An alert banner is displayed: `"ACCESS RESTRICTED: Your meal selection privileges have been temporarily suspended by the warden."`
 5. **Absence Penalty Warning (Red-Flag)**:
    - If `user.isRedFlagged === true`, a warning banner is displayed: `"ABSENCE WARNING: You missed a previously pre-selected lunch. Please check in with the kitchen chef on your next meal to clear your red flag."`
 6. **Global Lock State**:
-   - If `SystemConfig.isGlobalLocked === true`, all student selection controls freeze regardless of the day of the week.
+   - If `SystemConfig.isGlobalLocked === true`, all student selection controls freeze system-wide.
 
 ---
 
@@ -228,15 +225,19 @@ Every state-altering administrative or disciplinary operation creates an immutab
 1. **Global Selection Lock**:
    - Controls `SystemConfig.isGlobalLocked`.
    - Activating the lock immediately freezes meal selection for all students across the entire institution.
-   - Deactivating the lock restores normal Friday-only rules.
-2. **Student Meal Privilege Suspension**:
+   - Deactivating the lock restores active student selection privileges.
+2. **Attendance & Meal Report Generation**:
+   - Full date-range filtering (From Date to To Date).
+   - High-level KPIs and detailed student logs.
+   - UTF-8 CSV download for spreadsheet analysis.
+3. **Student Meal Privilege Suspension**:
    - Admins can block or unblock any student individually.
    - When blocking, an administrative reason is attached (`penaltyReason`), displayed directly on the student's dashboard.
    - When unblocking, `penaltyReason` is wiped.
-3. **Direct Meal Override (Single-Day & Full-Week)**:
+4. **Direct Meal Override (Single-Day & Full-Week)**:
    - The warden can manually override any student's lunch selection for any day of the current week.
-   - Bypasses all restrictions: Friday-only rules, global lock state, and student block status.
-4. **Account Management**:
+   - Bypasses all restrictions: global lock state and student block status.
+5. **Account Management**:
    - Create student accounts (auto-assigns Room, hashes default password, seeds initial `MealSelection`).
    - Create chef accounts (assigns Shift schedule, hashes default password).
    - Delete users with cascading deletion of corresponding `MealSelection` and `Attendance` records.

@@ -37,7 +37,7 @@ export default function StudentDashboard() {
   const [isUpdating, setIsUpdating] = useState(false);
 
   const handleLunchCheckboxChange = async (day: DayKey) => {
-    if (!isFriday || isGlobalLocked || currentUser?.isBlocked) return;
+    if (isGlobalLocked || currentUser?.isBlocked) return;
 
     setIsUpdating(true);
     try {
@@ -58,7 +58,7 @@ export default function StudentDashboard() {
 
   const selectedLunchesCount = studentSchedule.filter((d) => d.lunch.selected).length;
   const isStudentBlocked = currentUser?.isBlocked;
-  const isCanModifyLunch = isFriday && !isGlobalLocked && !isStudentBlocked;
+  const isCanModifyLunch = !isGlobalLocked && !isStudentBlocked;
 
   if (!isHydrated) {
     return (
@@ -120,22 +120,26 @@ export default function StudentDashboard() {
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-extrabold text-sm sm:text-base text-base-content">
-                  {isFriday ? "Upcoming Week Selection" : "Current Week Schedule"}
+                  Weekly Meal Selection
                 </span>
                 <span
                   className={`badge badge-sm font-black text-[10px] uppercase py-2 px-2.5 ${
                     isCanModifyLunch
                       ? "badge-success text-success-content"
+                      : isGlobalLocked
+                      ? "badge-error text-white"
                       : "badge-ghost text-base-content/70"
                   }`}
                 >
-                  {isCanModifyLunch ? "Friday Open" : "Locked (Friday Only)"}
+                  {isCanModifyLunch ? "Selection Open" : isGlobalLocked ? "Frozen (Global Lock)" : "Suspended"}
                 </span>
               </div>
               <p className="text-[11px] sm:text-xs text-base-content/60 mt-0.5">
-                {isFriday
-                  ? "Selections apply to the upcoming week (Saturday through Friday)."
-                  : `Operating week cycle. Next selection window opens on Friday.`}
+                {isCanModifyLunch
+                  ? "Meal selections are currently unlocked. Customize your lunch choices below."
+                  : isGlobalLocked
+                  ? "Meal choices are frozen by administration. You can view your schedule below."
+                  : "Meal privileges are suspended. Contact hostel warden."}
               </p>
             </div>
           </div>
@@ -152,7 +156,7 @@ export default function StudentDashboard() {
         {/* Policy Micro-Hint */}
         <div className="flex items-center gap-1.5 px-1 text-[11px] font-semibold text-base-content/60">
           <Info className="w-3.5 h-3.5 shrink-0" />
-          <span>Breakfast & Dinner are daily guarantees. Toggle Lunch below on Fridays.</span>
+          <span>Breakfast & Dinner are daily guarantees. Toggle Lunch below as needed.</span>
         </div>
 
         {/* Redesigned Daily Cards: Vertically Stacked with Single Horizontal Meal Row */}
@@ -210,7 +214,7 @@ export default function StudentDashboard() {
                           ? "bg-primary text-primary-content border-primary shadow-xs hover:brightness-105 active:scale-[0.98]"
                           : "bg-base-100 hover:bg-base-200 border-base-300 text-base-content active:scale-[0.98]"
                       }`}
-                      title={!isCanModifyLunch ? "Lunch choice locked (Fridays only)" : "Toggle lunch preference"}
+                      title={!isCanModifyLunch ? "Lunch choice locked" : "Toggle lunch preference"}
                     >
                       <span className="flex items-center gap-1.5 truncate">
                         <Sun

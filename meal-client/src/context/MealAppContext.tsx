@@ -191,16 +191,29 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [currentUserData, isHydrated]);
 
-  // 3. Load initial Global Lock state directly via Server Action
+  // 3. Load initial Global Lock state directly via Server Action with live polling & window focus reactivity
   useEffect(() => {
     let ignore = false;
-    void getGlobalLockStatusAction().then((locked) => {
-      if (!ignore) {
-        setIsGlobalLocked(locked);
+    const fetchLock = async () => {
+      try {
+        const locked = await getGlobalLockStatusAction();
+        if (!ignore) {
+          setIsGlobalLocked(locked);
+        }
+      } catch {
+        // silent
       }
-    });
+    };
+
+    void fetchLock();
+    const interval = setInterval(fetchLock, 4000);
+    const onFocus = () => void fetchLock();
+    window.addEventListener("focus", onFocus);
+
     return () => {
       ignore = true;
+      clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
     };
   }, []);
 
@@ -541,8 +554,7 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("meal_user_session");
   };
 
-  // Strict Calendar Friday Check (Friday is day 5)
-  // Lunch selection is strictly restricted to real calendar Fridays for the upcoming week cycle.
+  // Today's formatted label reflecting active Global Lock state
   const isFriday = typeof window !== "undefined" ? new Date().getDay() === 5 : false;
   
   const formattedToday = new Date().toLocaleDateString("en-US", {
@@ -552,9 +564,9 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
     day: "numeric",
   });
 
-  const todayDateFormatted = isFriday
-    ? `${formattedToday} (Selection Window Open)`
-    : `${formattedToday} (Regular Operating Day)`;
+  const todayDateFormatted = isGlobalLocked
+    ? `${formattedToday} (Selection Frozen - Admin Lock)`
+    : `${formattedToday} (Selection Open)`;
 
   // Active student record
   const activeStudent: StudentRecord =
@@ -622,17 +634,10 @@ export function MealAppProvider({ children }: { children: React.ReactNode }) {
 
   // Toggle student lunch choice directly via Server Action
   const toggleStudentLunch = async (day: DayKey): Promise<{ success: boolean; message: string }> => {
-    if (!isFriday) {
-      return {
-        success: false,
-        message: "LUNCH SELECTION LOCKED: Lunch choices can ONLY be selected or modified on FRIDAYS.",
-      };
-    }
-
     if (isGlobalLocked) {
       return {
         success: false,
-        message: "ADMIN LOCKED: The global selection window is currently locked by the administration.",
+        message: "ADMIN LOCKED: The global selection window is currently locked by administration.",
       };
     }
 

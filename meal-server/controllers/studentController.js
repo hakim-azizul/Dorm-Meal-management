@@ -49,8 +49,8 @@ export const getMySelection = async (req, res) => {
     const isGlobalLocked = config ? config.isGlobalLocked : false;
     const isFriday = new Date().getDay() === 5;
 
-    // On Friday, students view/select the UPCOMING week. Otherwise, current active week.
-    const defaultWeek = isFriday ? getSelectionWeekStartDate() : getCurrentWeekStartDate();
+    // Active operating week cycle (Saturday through Friday)
+    const defaultWeek = getCurrentWeekStartDate();
     const weekStartDate = req.query.weekStartDate || defaultWeek;
     let selection = await MealSelection.findOne({ studentId, weekStartDate });
 
@@ -111,21 +111,12 @@ export const selectLunch = async (req, res) => {
     if (config?.isGlobalLocked) {
       return res.status(403).json({
         success: false,
-        message: "Admin Global Lock is active. Weekly selections cannot be modified at this time.",
+        message: "ADMIN LOCKED: All meal selections are currently frozen by administration.",
       });
     }
 
-    // 3. Validate Strict Friday-Only Policy (getDay() === 5 is Friday)
-    const isActuallyFriday = new Date().getDay() === 5;
-    if (!isActuallyFriday) {
-      return res.status(400).json({
-        success: false,
-        message: "RESTRICTION: Lunch selection can ONLY be modified on FRIDAYS for the upcoming week.",
-      });
-    }
-
-    // 4. Upsert Selection strictly for the upcoming week cycle
-    const targetWeek = weekStartDate || getSelectionWeekStartDate();
+    // 3. Upsert Selection for active operating week
+    const targetWeek = weekStartDate || getCurrentWeekStartDate();
     const updated = await MealSelection.findOneAndUpdate(
       { studentId, weekStartDate: targetWeek },
       {
@@ -139,7 +130,7 @@ export const selectLunch = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Upcoming week lunch preferences saved successfully.",
+      message: "Meal preferences saved successfully.",
       data: updated,
     });
   } catch (error) {

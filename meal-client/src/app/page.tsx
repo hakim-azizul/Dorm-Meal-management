@@ -61,13 +61,13 @@ export default function HomePage() {
         {/* Live System Status Ticker */}
         <div className="mt-8 inline-flex flex-wrap items-center justify-center gap-4 p-3 rounded-2xl bg-base-200/80 border border-base-300 text-xs">
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-base-content/80">Friday Window:</span>
+            <span className="font-semibold text-base-content/80">Meal Selections:</span>
             <span
               className={`badge badge-sm font-bold ${
-                isFriday ? "badge-success text-success-content" : "badge-warning"
+                !isGlobalLocked ? "badge-success text-success-content" : "badge-error text-white"
               }`}
             >
-              {isFriday ? "OPEN FOR SELECTION" : "LOCKED (Sat-Thu)"}
+              {!isGlobalLocked ? "OPEN FOR SELECTION" : "FROZEN (ADMIN LOCK)"}
             </span>
           </div>
           <div className="w-px h-4 bg-base-300 hidden sm:block"></div>
@@ -75,10 +75,10 @@ export default function HomePage() {
             <span className="font-semibold text-base-content/80">Admin Global Lock:</span>
             <span
               className={`badge badge-sm font-bold ${
-                isGlobalLocked ? "badge-error text-error-content" : "badge-info text-info-content"
+                isGlobalLocked ? "badge-error text-white" : "badge-success text-success-content"
               }`}
             >
-              {isGlobalLocked ? "ACTIVATED" : "UNLOCKED"}
+              {isGlobalLocked ? "ACTIVATED (LOCKED)" : "DEACTIVATED (UNLOCKED)"}
             </span>
           </div>
         </div>
@@ -98,7 +98,7 @@ export default function HomePage() {
                 <span className="badge badge-info badge-sm">Role 1</span>
               </h2>
               <p className="text-sm text-base-content/70 mt-2 leading-relaxed">
-                Breakfast and dinner are fixed and guaranteed. Students view the weekly roster and can customize or opt out of lunches on Fridays.
+                Breakfast and dinner are fixed and guaranteed. Students view the weekly roster and can customize lunch choices when selections are open.
               </p>
               <div className="mt-4 space-y-2 text-xs">
                 <div className="flex items-center gap-2 text-base-content/80">
@@ -107,7 +107,7 @@ export default function HomePage() {
                 </div>
                 <div className="flex items-center gap-2 text-base-content/80">
                   <Clock className="w-4 h-4 text-blue-500 shrink-0" />
-                  <span>Friday-only lunch customization lock</span>
+                  <span>Controlled via Admin Global Lock</span>
                 </div>
               </div>
             </div>
@@ -125,31 +125,31 @@ export default function HomePage() {
           {/* Admin Portal Card */}
           <div className="card bg-base-100 border border-base-300 shadow-md hover:shadow-xl transition-all duration-300 flex flex-col justify-between group">
             <div className="card-body p-6">
-              <div className="w-12 h-12 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                 <ShieldCheck className="w-6 h-6" />
               </div>
               <h2 className="card-title text-xl font-bold flex items-center justify-between">
                 <span>{t("adminPortal")}</span>
-                <span className="badge badge-secondary badge-sm">Role 2</span>
+                <span className="badge badge-success text-success-content badge-sm font-bold">Role 2</span>
               </h2>
               <p className="text-sm text-base-content/70 mt-2 leading-relaxed">
-                Full authority over the meal scheduling system. Master global lock switch, manage kitchen staff, and impose disciplinary meal blocks.
+                Full authority over the meal scheduling system. Master global lock switch, manage staff, export attendance reports, and set disciplinary blocks.
               </p>
               <div className="mt-4 space-y-2 text-xs">
                 <div className="flex items-center gap-2 text-base-content/80">
-                  <Lock className="w-4 h-4 text-purple-500 shrink-0" />
-                  <span>Global meal lock / unlock switch</span>
+                  <Lock className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Master global meal lock / unlock switch</span>
                 </div>
                 <div className="flex items-center gap-2 text-base-content/80">
                   <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
-                  <span>Individual student penalty overrides</span>
+                  <span>Individual student penalty overrides & CSV exports</span>
                 </div>
               </div>
             </div>
             <div className="card-actions p-6 pt-0">
               <Link
                 href="/dashboard/admin"
-                className="btn btn-outline btn-secondary btn-sm w-full gap-2 font-medium"
+                className="btn btn-outline btn-success btn-sm w-full gap-2 font-medium"
               >
                 <span>Enter Admin Portal</span>
                 <ArrowRight className={`w-3.5 h-3.5 ${language === "ar" ? "rotate-180" : ""}`} />
