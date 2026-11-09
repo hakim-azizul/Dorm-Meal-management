@@ -23,7 +23,6 @@ export default function StudentDashboard() {
     studentSchedule,
     toggleStudentLunch,
     isGlobalLocked,
-    isFriday,
     systemDay,
     isHydrated,
     isSidebarOpen,
@@ -205,7 +204,7 @@ export default function StudentDashboard() {
                       type="button"
                       disabled={!isCanModifyLunch || isUpdating}
                       onClick={() => handleLunchCheckboxChange(dayKey)}
-                      className={`flex items-center justify-between gap-1.5 py-2 px-2.5 sm:px-3 rounded-xl border text-xs font-bold transition-all min-h-[2.5rem] ${
+                      className={`flex items-center justify-between gap-1.5 py-2 px-2.5 sm:px-3 rounded-xl border text-xs font-bold transition-all min-h-10 ${
                         !isCanModifyLunch
                           ? isLunchSelected
                             ? "bg-primary/10 border-primary/30 text-primary opacity-80 cursor-not-allowed"

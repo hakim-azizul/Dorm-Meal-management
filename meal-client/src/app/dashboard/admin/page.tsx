@@ -24,11 +24,6 @@ import {
   FileSpreadsheet,
   Download,
   RefreshCw,
-  Calendar,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  Filter,
 } from "lucide-react";
 
 const DAYS: DayKey[] = ["sat", "sun", "mon", "tue", "wed", "thu", "fri"];
@@ -439,7 +434,7 @@ export default function AdminDashboard() {
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-extrabold text-sm sm:text-base">
+                <span className="font-extrabold  text-amber-500  text-sm sm:text-base">
                   {isGlobalLocked
                     ? "Global Selection: FROZEN (LOCKED)"
                     : "Global Selection: ACTIVE (UNLOCKED)"}
@@ -454,7 +449,7 @@ export default function AdminDashboard() {
                   {isGlobalLocked ? "Frozen" : "Open for Students"}
                 </span>
               </div>
-              <p className="text-[11px] sm:text-xs opacity-80 mt-0.5">
+              <p className="text-[11px] sm:text-xs text-amber-500 font-semibold mt-0.5">
                 {isGlobalLocked
                   ? "Student meal choices are currently frozen across the system. Students cannot modify selections."
                   : "Students can freely customize and save their meal selections. Toggle to freeze whenever needed."}
@@ -583,11 +578,11 @@ export default function AdminDashboard() {
                   placeholder="Search by student name, room, or email..."
                   className="input input-sm w-full bg-base-100 rounded-xl border-base-300 ps-9 pe-8 text-xs font-medium"
                 />
-                <Search className="w-4 h-4 text-base-content/40 absolute start-3 top-2.5" />
+                <Search className="w-4 h-4 text-base-content/40 absolute inset-s-3 top-2.5" />
                 {searchTerm && (
                   <button
                     onClick={() => setSearchTerm("")}
-                    className="absolute end-2.5 top-2.5 text-base-content/40 hover:text-base-content"
+                    className="absolute inset-e-2.5 top-2.5 text-base-content/40 hover:text-base-content"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -1046,7 +1041,7 @@ export default function AdminDashboard() {
                     placeholder="Search preview by name or room..."
                     className="input input-xs w-full bg-base-200/60 rounded-lg ps-7 pe-2 text-xs border-base-300"
                   />
-                  <Search className="w-3 h-3 text-base-content/40 absolute start-2 top-2" />
+                  <Search className="w-3 h-3 text-base-content/40 absolute inset-s-2 top-2" />
                 </div>
               </div>
 
@@ -1056,7 +1051,7 @@ export default function AdminDashboard() {
                   <p className="text-xs text-base-content/60">Compiling date range records from database...</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto max-h-[480px]">
+                <div className="overflow-x-auto max-h-120">
                   <table className="table table-xs w-full">
                     <thead className="sticky top-0 bg-base-100 border-b border-base-200 text-base-content/60">
                       <tr>

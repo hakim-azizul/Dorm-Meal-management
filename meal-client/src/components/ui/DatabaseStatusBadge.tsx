@@ -10,7 +10,7 @@ export function DatabaseStatusBadge({ className = "" }: { className?: string }) 
       title="Directly connected to MongoDB Atlas database"
     >
       <Wifi className="w-3 h-3" />
-      <span>Database Online</span>
+      <span>Online</span>
     </span>
   );
 }

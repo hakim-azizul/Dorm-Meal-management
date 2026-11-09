@@ -20,7 +20,7 @@ import {
 
 export default function HomePage() {
   const { t, language } = useLanguage();
-  const { isGlobalLocked, isFriday } = useMealApp();
+  const { isGlobalLocked} = useMealApp();
 
   return (
     <div className="flex flex-col gap-12 py-8 md:py-16">

@@ -184,11 +184,11 @@ export default function ChefDashboard() {
               placeholder={`Search ${activeSession} attendees by name or room...`}
               className="input input-sm w-full bg-base-100 rounded-xl border-base-300 ps-9 pe-8 text-xs font-medium"
             />
-            <Search className="w-4 h-4 text-base-content/40 absolute start-3 top-2.5" />
+            <Search className="w-4 h-4 text-base-content/40 absolute inset-s-3 top-2.5" />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery("")}
-                className="absolute end-2.5 top-2.5 text-base-content/40 hover:text-base-content"
+                className="absolute inset-e-2.5 top-2.5 text-base-content/40 hover:text-base-content"
               >
                 <X className="w-3.5 h-3.5" />
               </button>

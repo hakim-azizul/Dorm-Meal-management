@@ -60,7 +60,6 @@ export function DashboardSidebar({
     logout,
     isGlobalLocked,
     toggleGlobalLock,
-    isFriday,
     students,
   } = useMealApp();
   const pathname = usePathname();
@@ -120,7 +119,7 @@ export function DashboardSidebar({
 
       {/* Sidebar Container */}
       <aside
-        className={`fixed top-0 bottom-0 start-0 z-50 w-72 sm:w-80 bg-base-100 border-e border-base-300 flex flex-col justify-between shadow-xl lg:shadow-none transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static ${
+        className={`fixed top-0 bottom-0 inset-s-0 z-50 w-72 sm:w-80 bg-base-100 border-e border-base-300 flex flex-col justify-between shadow-xl lg:shadow-none transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static ${
           isOpen ? "translate-x-0" : "-translate-x-full rtl:translate-x-full lg:rtl:translate-x-0"
         }`}
       >
@@ -238,7 +237,7 @@ export function DashboardSidebar({
                     placeholder="Quick find..."
                     className="input input-xs w-full bg-base-100 rounded-lg text-xs ps-7 pe-2 border-base-300"
                   />
-                  <Search className="w-3 h-3 text-base-content/40 absolute start-2 top-2" />
+                  <Search className="w-3 h-3 text-base-content/40 absolute inset-s-2 top-2" />
                 </div>
 
                 <div className="max-h-40 overflow-y-auto space-y-1 pe-1">
