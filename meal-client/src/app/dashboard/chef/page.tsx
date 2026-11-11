@@ -170,7 +170,7 @@ export default function ChefDashboard() {
         {activeSession === "lunch" && (
           <div className="px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] font-bold text-amber-900 dark:text-amber-200 flex items-center gap-2">
             <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-            <span>Strict Pre-Selection: Only students who booked lunch for today appear on this list.</span>
+            <span>Only students who booked lunch for today appear on this list.</span>
           </div>
         )}
 

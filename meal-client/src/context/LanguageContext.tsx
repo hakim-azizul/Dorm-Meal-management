@@ -147,6 +147,10 @@ export const translations = {
   expectedToday: { en: "Expected for", ar: "المتوقع لوجبة" },
   presentCount: { en: "Checked In Present", ar: "تم تسجيل الحضور" },
   absentCount: { en: "Marked Absent", ar: "المسجلون غياب" },
+  strictAttendanceNote: { 
+    en: "Attendance is strictly enforced. Only students who pre-selected lunch for today are eligible to check in. Unselected students are excluded from this roster.", 
+    ar: "يتم تطبيق الحضور بدقة. فقط الطلاب الذين حجزوا الغداء مسبقاً لليوم مؤهلون لتسجيل الحضور. الطلاب الذين لم يحجزوا تم استبعادهم تماماً." 
+  },
 
   // Login Page
   loginTitle: { en: "Access Meal Management Portal", ar: "الدخول إلى بوابة إدارة الوجبات" },
