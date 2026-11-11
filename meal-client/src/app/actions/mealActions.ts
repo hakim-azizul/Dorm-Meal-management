@@ -2,7 +2,7 @@
 
 import { getDatabase } from "@/lib/mongodb";
 import { ObjectId } from "mongodb";
-import { getCurrentSaturday, getSelectionSaturday } from "./authActions";
+import { getCurrentSaturday} from "./authActions";
 import { logAuditEvent } from "@/lib/audit";
 
 export type DayKey = "sat" | "sun" | "mon" | "tue" | "wed" | "thu" | "fri";
