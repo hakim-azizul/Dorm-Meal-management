@@ -23,6 +23,9 @@ export function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
 
+  // উইন্ডো অবজেক্ট চেক করে সরাসরি মাউন্টেড নির্ধারণ (useEffect এর ঝামেলা নেই)
+  const isMounted = typeof window !== "undefined";
+
   const isDashboardRoute = pathname.startsWith("/dashboard");
 
   const handleSignOut = () => {
@@ -35,7 +38,6 @@ export function Navbar() {
       <div className="container mx-auto flex h-14 sm:h-16 items-center justify-between px-3 sm:px-6 lg:px-8">
         {/* Brand / Logo + Mobile Sidebar Trigger */}
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* Mobile Sidebar Hamburger (only on dashboard routes) */}
           {isDashboardRoute && currentUser && (
             <button
               onClick={toggleSidebar}
@@ -73,7 +75,7 @@ export function Navbar() {
           </Link>
         </div>
 
-        {/* Right Actions: Theme, Lang, Simple Sign Out / In */}
+        {/* Right Actions */}
         <div className="flex items-center gap-1.5 sm:gap-2">
           {/* Language Switcher */}
           <button
@@ -89,13 +91,13 @@ export function Navbar() {
           <button
             onClick={toggleTheme}
             className="btn btn-sm btn-ghost btn-circle"
-            title={theme === "light" ? "Dark Mode" : "Light Mode"}
+            title={isMounted && theme === "light" ? "Dark Mode" : "Light Mode"}
             aria-label="Toggle theme"
           >
-            {theme === "light" ? (
-              <Moon className="w-4 h-4 text-base-content" />
-            ) : (
+            {isMounted && theme === "dark" ? (
               <Sun className="w-4 h-4 text-warning" />
+            ) : (
+              <Moon className="w-4 h-4 text-base-content" />
             )}
           </button>
 

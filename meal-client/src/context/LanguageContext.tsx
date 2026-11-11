@@ -13,8 +13,8 @@ export interface Translations {
 
 export const translations = {
   // Global & Navigation
-  appName: { en: "Hostel Dining System", ar: "نظام وجبات السكن" },
-  appTitle: { en: "Hostel Dining System", ar: "نظام وجبات السكن" },
+  appName: { en: "WAMY Dining System", ar: "نظام وجبات السكن الندوة" },
+  appTitle: { en: "WAMY Dining System", ar: "نظام وجبات السكن الندوة" },
   appSubtitle: { en: "Meal Management", ar: "إدارة الوجبات" },
   home: { en: "Home", ar: "الرئيسية" },
   studentPortal: { en: "Student Dashboard", ar: "لوحة الطالب" },

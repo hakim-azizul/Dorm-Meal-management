@@ -21,14 +21,14 @@ export function Footer() {
                 {t("appName")}
               </span>
               <span className="text-xs text-base-content/60 block">
-                Automated Hostel Dining & Meal Management System
+                Automated Wamy Dining & Meal Management System
               </span>
             </div>
           </div>
 
           {/* Copyright notice */}
           <div className="text-xs text-base-content/50">
-            <span>© {new Date().getFullYear()} Hostel Meal Management. All rights reserved.</span>
+            <span>© {new Date().getFullYear()} Wamy Meal Management. All rights reserved.</span>
           </div>
         </div>
       </div>

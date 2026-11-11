@@ -46,16 +46,26 @@ export default function AdminDashboard() {
     closeSidebar,
   } = useMealApp();
 
-  const [activeTab, setActiveTab] = useState<"students" | "chefs" | "reports">("students");
+  const [activeTab, setActiveTab] = useState<"students" | "chefs" | "reports">(
+    "students",
+  );
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "penalized" | "redflags" | "active">("all");
-  const [notification, setNotification] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "penalized" | "redflags" | "active"
+  >("all");
+  const [notification, setNotification] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
   // Selected student for quick focus from sidebar
-  const [selectedStudentId, setSelectedStudentId] = useState<string | undefined>(undefined);
+  const [selectedStudentId, setSelectedStudentId] = useState<
+    string | undefined
+  >(undefined);
 
   // Punishment Modal
-  const [selectedStudentForBlock, setSelectedStudentForBlock] = useState<StudentRecord | null>(null);
+  const [selectedStudentForBlock, setSelectedStudentForBlock] =
+    useState<StudentRecord | null>(null);
   const [penaltyReasonText, setPenaltyReasonText] = useState("");
 
   // Create Student Modal
@@ -71,7 +81,11 @@ export default function AdminDashboard() {
   const [newChefShift, setNewChefShift] = useState("Morning & Lunch Session");
 
   // Reset Password Confirmation Modal
-  const [userToReset, setUserToReset] = useState<{ id: string; name: string; role: string } | null>(null);
+  const [userToReset, setUserToReset] = useState<{
+    id: string;
+    name: string;
+    role: string;
+  } | null>(null);
 
   // ============================================================================
   // REPORT MODULE STATE
@@ -85,49 +99,89 @@ export default function AdminDashboard() {
     return { from, to };
   };
 
-  const [reportFromDate, setReportFromDate] = useState<string>(() => getInitialDates().from);
-  const [reportToDate, setReportToDate] = useState<string>(() => getInitialDates().to);
+  const [reportFromDate, setReportFromDate] = useState<string>(
+    () => getInitialDates().from,
+  );
+  const [reportToDate, setReportToDate] = useState<string>(
+    () => getInitialDates().to,
+  );
   const [reportRecords, setReportRecords] = useState<ReportItemRecord[]>([]);
-  const [reportSummary, setReportSummary] = useState<AttendanceReportSummary | null>(null);
+  const [reportSummary, setReportSummary] =
+    useState<AttendanceReportSummary | null>(null);
   const [isLoadingReport, setIsLoadingReport] = useState<boolean>(false);
   const [reportSearch, setReportSearch] = useState<string>("");
-  const [reportMealFilter, setReportMealFilter] = useState<"all" | "breakfast" | "lunch" | "dinner">("all");
-  const [reportStatusFilter, setReportStatusFilter] = useState<"all" | "present" | "absent" | "unmarked">("all");
+  const [reportMealFilter, setReportMealFilter] = useState<
+    "all" | "breakfast" | "lunch" | "dinner"
+  >("all");
+  const [reportStatusFilter, setReportStatusFilter] = useState<
+    "all" | "present" | "absent" | "unmarked"
+  >("all");
 
-  const loadReportData = useCallback(async (from?: string, to?: string) => {
-    setIsLoadingReport(true);
-    try {
-      const res = await getAttendanceAndMealReportAction({
-        fromDate: from || reportFromDate,
-        toDate: to || reportToDate,
-      });
-
-      if (res.success && res.records && res.summary) {
-        setReportRecords(res.records);
-        setReportSummary(res.summary);
-      } else {
-        setNotification({
-          type: "error",
-          text: res.message || "Failed to load attendance report.",
+  const loadReportData = useCallback(
+    async (from?: string, to?: string) => {
+      setIsLoadingReport(true);
+      try {
+        const res = await getAttendanceAndMealReportAction({
+          fromDate: from || reportFromDate,
+          toDate: to || reportToDate,
         });
+
+        if (res.success && res.records && res.summary) {
+          setReportRecords(res.records);
+          setReportSummary(res.summary);
+        } else {
+          setNotification({
+            type: "error",
+            text: res.message || "Failed to load attendance report.",
+          });
+        }
+      } catch (err: unknown) {
+        const msg =
+          err instanceof Error ? err.message : "Error generating report.";
+        setNotification({ type: "error", text: msg });
+      } finally {
+        setIsLoadingReport(false);
       }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Error generating report.";
-      setNotification({ type: "error", text: msg });
-    } finally {
-      setIsLoadingReport(false);
-    }
-  }, [reportFromDate, reportToDate]);
+    },
+    [reportFromDate, reportToDate],
+  );
 
   // Lazy-load report when switching to Reports tab
   useEffect(() => {
-    if (activeTab === "reports" && reportRecords.length === 0 && !isLoadingReport) {
-      void loadReportData();
+    if (activeTab === "reports") {
+      const fetchReport = async () => {
+        setIsLoadingReport(true);
+        try {
+          const res = await getAttendanceAndMealReportAction({
+            fromDate: reportFromDate,
+            toDate: reportToDate,
+          });
+
+          if (res.success && res.records && res.summary) {
+            setReportRecords(res.records);
+            setReportSummary(res.summary);
+          } else {
+            setNotification({
+              type: "error",
+              text: res.message || "Failed to load attendance report.",
+            });
+          }
+        } catch (err: unknown) {
+          const msg =
+            err instanceof Error ? err.message : "Error generating report.";
+          setNotification({ type: "error", text: msg });
+        } finally {
+          setIsLoadingReport(false);
+        }
+      };
+      void fetchReport();
     }
-  }, [activeTab, reportRecords.length, isLoadingReport, loadReportData]);
+  }, [activeTab, reportFromDate, reportToDate]);
 
   // Presets handler
-  const handleApplyPreset = (preset: "today" | "yesterday" | "thisWeek" | "last7" | "last30") => {
+  const handleApplyPreset = (
+    preset: "today" | "yesterday" | "thisWeek" | "last7" | "last30",
+  ) => {
     const now = new Date();
     let from = "";
     let to = "";
@@ -170,7 +224,10 @@ export default function AdminDashboard() {
   // CSV Export
   const handleDownloadCsv = () => {
     if (!reportRecords.length) {
-      setNotification({ type: "error", text: "No records to download. Please generate a report first." });
+      setNotification({
+        type: "error",
+        text: "No records to download. Please generate a report first.",
+      });
       return;
     }
 
@@ -212,7 +269,7 @@ export default function AdminDashboard() {
     link.href = url;
     link.setAttribute(
       "download",
-      `Meal_Attendance_Report_${reportFromDate}_to_${reportToDate}.csv`
+      `Meal_Attendance_Report_${reportFromDate}_to_${reportToDate}.csv`,
     );
     document.body.appendChild(link);
     link.click();
@@ -235,8 +292,13 @@ export default function AdminDashboard() {
       r.date.includes(reportSearch);
 
     if (!matchesSearch) return false;
-    if (reportMealFilter !== "all" && r.mealType !== reportMealFilter) return false;
-    if (reportStatusFilter !== "all" && r.attendanceStatus !== reportStatusFilter) return false;
+    if (reportMealFilter !== "all" && r.mealType !== reportMealFilter)
+      return false;
+    if (
+      reportStatusFilter !== "all" &&
+      r.attendanceStatus !== reportStatusFilter
+    )
+      return false;
     return true;
   });
 
@@ -267,7 +329,10 @@ export default function AdminDashboard() {
 
   const handleOpenPenaltyModal = (student: StudentRecord) => {
     setSelectedStudentForBlock(student);
-    setPenaltyReasonText(student.penaltyReason || "Hostel noise complaint or mess policy violation");
+    setPenaltyReasonText(
+      student.penaltyReason ||
+        "Hostel noise complaint or mess policy violation",
+    );
   };
 
   const handleConfirmPenalty = async () => {
@@ -430,7 +495,11 @@ export default function AdminDashboard() {
                   : "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400"
               }`}
             >
-              {isGlobalLocked ? <Lock className="w-5 h-5" /> : <Unlock className="w-5 h-5" />}
+              {isGlobalLocked ? (
+                <Lock className="w-5 h-5" />
+              ) : (
+                <Unlock className="w-5 h-5" />
+              )}
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
@@ -591,23 +660,25 @@ export default function AdminDashboard() {
 
               {/* Status Filter Pills */}
               <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0">
-                {(["all", "active", "penalized", "redflags"] as const).map((filter) => (
-                  <button
-                    key={filter}
-                    onClick={() => setStatusFilter(filter)}
-                    className={`btn btn-xs rounded-lg capitalize font-bold ${
-                      statusFilter === filter
-                        ? "bg-emerald-600 text-white shadow-xs hover:bg-emerald-700 border-none"
-                        : "btn-ghost bg-base-200/60 text-base-content/70"
-                    }`}
-                  >
-                    {filter === "all"
-                      ? "All"
-                      : filter === "redflags"
-                      ? "Flagged"
-                      : filter}
-                  </button>
-                ))}
+                {(["all", "active", "penalized", "redflags"] as const).map(
+                  (filter) => (
+                    <button
+                      key={filter}
+                      onClick={() => setStatusFilter(filter)}
+                      className={`btn btn-xs rounded-lg capitalize font-bold ${
+                        statusFilter === filter
+                          ? "bg-emerald-600 text-white shadow-xs hover:bg-emerald-700 border-none"
+                          : "btn-ghost bg-base-200/60 text-base-content/70"
+                      }`}
+                    >
+                      {filter === "all"
+                        ? "All"
+                        : filter === "redflags"
+                          ? "Flagged"
+                          : filter}
+                    </button>
+                  ),
+                )}
               </div>
             </div>
 
@@ -644,7 +715,8 @@ export default function AdminDashboard() {
                             </span>
                           ) : student.isRedFlagged ? (
                             <span className="badge badge-sm bg-amber-500/15 text-amber-800 dark:text-amber-200 border border-amber-500/30 font-bold gap-1 text-[10px]">
-                              <AlertTriangle className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" /> Red Flag
+                              <AlertTriangle className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />{" "}
+                              Red Flag
                             </span>
                           ) : (
                             <span className="badge badge-sm badge-success text-success-content font-bold text-[10px]">
@@ -660,7 +732,8 @@ export default function AdminDashboard() {
                         </div>
                         <p className="text-[11px] text-base-content/60 truncate mt-0.5">
                           {student.email}
-                          {student.penaltyReason && ` • ${student.penaltyReason}`}
+                          {student.penaltyReason &&
+                            ` • ${student.penaltyReason}`}
                         </p>
                       </div>
                     </div>
@@ -710,7 +783,11 @@ export default function AdminDashboard() {
 
                       <button
                         onClick={() =>
-                          setUserToReset({ id: student.id, name: student.name, role: "Student" })
+                          setUserToReset({
+                            id: student.id,
+                            name: student.name,
+                            role: "Student",
+                          })
                         }
                         className="btn btn-xs btn-ghost btn-circle text-base-content/70 hover:text-base-content"
                         title="Reset Password to Dorm@1234"
@@ -776,7 +853,11 @@ export default function AdminDashboard() {
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     onClick={() =>
-                      setUserToReset({ id: chef.id, name: chef.name, role: "Chef" })
+                      setUserToReset({
+                        id: chef.id,
+                        name: chef.name,
+                        role: "Chef",
+                      })
                     }
                     className="btn btn-xs btn-ghost btn-circle text-base-content/70 hover:text-base-content"
                     title="Reset Password to Dorm@1234"
@@ -817,7 +898,8 @@ export default function AdminDashboard() {
                     <span>Attendance & Meal Records Export</span>
                   </h3>
                   <p className="text-[11px] sm:text-xs text-base-content/60 mt-0.5">
-                    Select a date range to filter check-ins and meal bookings across the hostel dining hall.
+                    Select a date range to filter check-ins and meal bookings
+                    across the hostel dining hall.
                   </p>
                 </div>
 
@@ -893,7 +975,15 @@ export default function AdminDashboard() {
                   </label>
                   <select
                     value={reportMealFilter}
-                    onChange={(e) => setReportMealFilter(e.target.value as "all" | "breakfast" | "lunch" | "dinner")}
+                    onChange={(e) =>
+                      setReportMealFilter(
+                        e.target.value as
+                          | "all"
+                          | "breakfast"
+                          | "lunch"
+                          | "dinner",
+                      )
+                    }
                     className="select select-sm w-full bg-base-200/60 rounded-xl border-base-300 text-xs font-semibold"
                   >
                     <option value="all">All Meals</option>
@@ -909,7 +999,15 @@ export default function AdminDashboard() {
                   </label>
                   <select
                     value={reportStatusFilter}
-                    onChange={(e) => setReportStatusFilter(e.target.value as "all" | "present" | "absent" | "unmarked")}
+                    onChange={(e) =>
+                      setReportStatusFilter(
+                        e.target.value as
+                          | "all"
+                          | "present"
+                          | "absent"
+                          | "unmarked",
+                      )
+                    }
                     className="select select-sm w-full bg-base-200/60 rounded-xl border-base-300 text-xs font-semibold"
                   >
                     <option value="all">All Statuses</option>
@@ -923,10 +1021,14 @@ export default function AdminDashboard() {
                   <button
                     type="button"
                     disabled={isLoadingReport}
-                    onClick={() => void loadReportData(reportFromDate, reportToDate)}
+                    onClick={() =>
+                      void loadReportData(reportFromDate, reportToDate)
+                    }
                     className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-none rounded-xl text-xs font-bold flex-1 gap-1.5 shadow-xs"
                   >
-                    <RefreshCw className={`w-3.5 h-3.5 ${isLoadingReport ? "animate-spin" : ""}`} />
+                    <RefreshCw
+                      className={`w-3.5 h-3.5 ${isLoadingReport ? "animate-spin" : ""}`}
+                    />
                     <span>{isLoadingReport ? "Loading..." : "Filter"}</span>
                   </button>
 
@@ -1048,7 +1150,9 @@ export default function AdminDashboard() {
               {isLoadingReport ? (
                 <div className="py-12 flex flex-col items-center justify-center gap-2">
                   <span className="loading loading-spinner loading-md text-emerald-600" />
-                  <p className="text-xs text-base-content/60">Compiling date range records from database...</p>
+                  <p className="text-xs text-base-content/60">
+                    Compiling date range records from database...
+                  </p>
                 </div>
               ) : (
                 <div className="overflow-x-auto max-h-120">
@@ -1069,11 +1173,17 @@ export default function AdminDashboard() {
                         <tr key={record.id} className="hover:bg-base-200/40">
                           <td className="font-semibold text-base-content">
                             <div>{record.date}</div>
-                            <div className="text-[10px] text-base-content/50 uppercase">{record.day}</div>
+                            <div className="text-[10px] text-base-content/50 uppercase">
+                              {record.day}
+                            </div>
                           </td>
                           <td>
-                            <div className="font-bold text-base-content">{record.studentName}</div>
-                            <div className="text-[10px] text-base-content/50 truncate max-w-44">{record.email}</div>
+                            <div className="font-bold text-base-content">
+                              {record.studentName}
+                            </div>
+                            <div className="text-[10px] text-base-content/50 truncate max-w-44">
+                              {record.email}
+                            </div>
                           </td>
                           <td className="font-semibold">{record.room}</td>
                           <td>
@@ -1084,7 +1194,9 @@ export default function AdminDashboard() {
                           <td>
                             {record.booked ? (
                               <span className="badge badge-xs bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 font-bold text-[9px]">
-                                {record.mealType === "lunch" ? "Booked Yes" : "Guaranteed"}
+                                {record.mealType === "lunch"
+                                  ? "Booked Yes"
+                                  : "Guaranteed"}
                               </span>
                             ) : (
                               <span className="badge badge-xs badge-ghost text-base-content/50 font-bold text-[9px]">
@@ -1131,13 +1243,16 @@ export default function AdminDashboard() {
 
                   {filteredReportRecords.length > 100 && (
                     <div className="p-2.5 text-center text-xs text-base-content/60 bg-base-200/40 rounded-b-xl border-t border-base-200">
-                      Showing first 100 of {filteredReportRecords.length} records. Download CSV for the complete comprehensive dataset.
+                      Showing first 100 of {filteredReportRecords.length}{" "}
+                      records. Download CSV for the complete comprehensive
+                      dataset.
                     </div>
                   )}
 
                   {filteredReportRecords.length === 0 && !isLoadingReport && (
                     <div className="py-8 text-center text-xs text-base-content/60">
-                      No records found for the selected date range and filter criteria.
+                      No records found for the selected date range and filter
+                      criteria.
                     </div>
                   )}
                 </div>
@@ -1158,7 +1273,8 @@ export default function AdminDashboard() {
               <span>Suspend Meal Privileges</span>
             </h3>
             <p className="text-xs text-base-content/70 mt-1">
-              Student: <strong>{selectedStudentForBlock.name}</strong> ({selectedStudentForBlock.room})
+              Student: <strong>{selectedStudentForBlock.name}</strong> (
+              {selectedStudentForBlock.room})
             </p>
 
             <div className="mt-3 space-y-2">
@@ -1205,7 +1321,9 @@ export default function AdminDashboard() {
 
             <form onSubmit={handleCreateStudent} className="space-y-3 mt-3">
               <div>
-                <label className="text-[11px] font-bold text-base-content/70">Full Name</label>
+                <label className="text-[11px] font-bold text-base-content/70">
+                  Full Name
+                </label>
                 <input
                   type="text"
                   required
@@ -1217,7 +1335,9 @@ export default function AdminDashboard() {
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-base-content/70">Hostel Room</label>
+                <label className="text-[11px] font-bold text-base-content/70">
+                  Hostel Room
+                </label>
                 <input
                   type="text"
                   required
@@ -1229,7 +1349,9 @@ export default function AdminDashboard() {
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-base-content/70">Email Address</label>
+                <label className="text-[11px] font-bold text-base-content/70">
+                  Email Address
+                </label>
                 <input
                   type="email"
                   required
@@ -1241,7 +1363,8 @@ export default function AdminDashboard() {
               </div>
 
               <p className="text-[10px] text-base-content/50">
-                Default password will be set to <code>Dorm@1234</code>. Student will be prompted to change it on first login.
+                Default password will be set to <code>Dorm@1234</code>. Student
+                will be prompted to change it on first login.
               </p>
 
               <div className="modal-action mt-4">
@@ -1277,7 +1400,9 @@ export default function AdminDashboard() {
 
             <form onSubmit={handleCreateChef} className="space-y-3 mt-3">
               <div>
-                <label className="text-[11px] font-bold text-base-content/70">Full Name</label>
+                <label className="text-[11px] font-bold text-base-content/70">
+                  Full Name
+                </label>
                 <input
                   type="text"
                   required
@@ -1289,7 +1414,9 @@ export default function AdminDashboard() {
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-base-content/70">Shift Schedule</label>
+                <label className="text-[11px] font-bold text-base-content/70">
+                  Shift Schedule
+                </label>
                 <input
                   type="text"
                   required
@@ -1301,7 +1428,9 @@ export default function AdminDashboard() {
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-base-content/70">Email Address</label>
+                <label className="text-[11px] font-bold text-base-content/70">
+                  Email Address
+                </label>
                 <input
                   type="email"
                   required
@@ -1343,7 +1472,8 @@ export default function AdminDashboard() {
               <span>Reset Password</span>
             </h3>
             <p className="text-xs text-base-content/70 mt-2">
-              Reset password for <strong>{userToReset.name}</strong> ({userToReset.role}) back to default: <code>Dorm@1234</code>?
+              Reset password for <strong>{userToReset.name}</strong> (
+              {userToReset.role}) back to default: <code>Dorm@1234</code>?
             </p>
 
             <div className="modal-action mt-4">
