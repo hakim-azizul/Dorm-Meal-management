@@ -33,7 +33,7 @@ export const translations = {
 
   // Landing Page
   heroBadge: { en: "Smart Hostel Dining & Attendance", ar: "إدارة ذكية لوجبات وحضور السكن الجامعي" },
-  heroTitle: { en: "Automated, Fair & Frictionless Hostel Meals", ar: "وجبات سكنية مؤتمتة، عادلة، وبدون تعقيد" },
+  heroTitle: { en: "Automated attendance System for WAMY", ar: "نظام حضور مؤتمت لسكن الندوة" },
   heroSubtitle: { 
     en: "Zero food waste. Students customize lunches when unlocked by admin, breakfast and dinner are always ready, and kitchen managers validate pre-selected meals seamlessly.", 
     ar: "لا هدر للطعام. يحدد الطلاب خيارات الغداء عند فتح القفل الإداري، الفطور والعشاء مضمونان دائمًا، وتأكيد الحضور بدقة للطاهي." 
